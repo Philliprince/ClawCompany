@@ -3,6 +3,7 @@
 import { agentManager } from '../agents/manager'
 import { taskManager } from '../tasks/manager'
 import { chatManager } from '../chat/manager'
+import { fileSystemManager } from '../filesystem/manager'
 import { Task, AgentRole, AgentContext } from '../agents/types'
 
 export interface WorkflowResult {
@@ -78,6 +79,15 @@ export class Orchestrator {
 
         // 收集生成的文件
         if (devResponse.files) {
+          // 保存文件到文件系统
+          for (const file of devResponse.files) {
+            try {
+              await fileSystemManager.writeFile(file.path, file.content)
+              console.log(`[Orchestrator] Saved file: ${file.path}`)
+            } catch (error) {
+              console.error(`[Orchestrator] Failed to save file ${file.path}:`, error)
+            }
+          }
           allFiles.push(...devResponse.files)
         }
 
