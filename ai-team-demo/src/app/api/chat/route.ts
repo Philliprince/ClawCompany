@@ -1,10 +1,7 @@
 // API 路由 - 处理聊天请求
 
 import { NextRequest, NextResponse } from 'next/server'
-import { agentManager } from '@/lib/agents/manager'
-import { taskManager } from '@/lib/tasks/manager'
-import { chatManager } from '@/lib/chat/manager'
-import { AgentRole } from '@/lib/agents/types'
+import { orchestrator } from '@/lib/orchestrator'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,48 +15,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 用户发送消息
-    chatManager.sendUserMessage(userMessage)
+    // 执行完整的 Agent 协作流程
+    const result = await orchestrator.executeUserRequest(userMessage)
 
-    // 创建初始任务给 PM Agent
-    const initialTask = taskManager.createTask(
-      userMessage, // title
-      userMessage, // description
-      'pm' as AgentRole, // assignedTo
-      [], // dependencies
-      [] // files
-    )
-
-    // 执行 PM Agent
-    const pmResponse = await agentManager.executeAgent('pm', initialTask, {
-      projectId: 'demo-project',
-      tasks: taskManager.getAllTasks(),
-      files: {},
-      chatHistory: chatManager.getHistory()
-    })
-
-    // 记录 PM 的回复
-    chatManager.broadcast('pm', pmResponse.message)
-
-    // 添加 PM 生成的子任务
-    if (pmResponse.tasks) {
-      pmResponse.tasks.forEach(taskData => {
-        taskManager.createTask(
-          taskData.title,
-          taskData.description,
-          taskData.assignedTo,
-          taskData.dependencies,
-          taskData.files
-        )
-      })
-    }
-
-    // 返回所有任务和消息
     return NextResponse.json({
-      success: true,
-      message: pmResponse.message,
-      tasks: taskManager.getAllTasks(),
-      chatHistory: chatManager.getHistory()
+      success: result.success,
+      message: result.messages[result.messages.length - 1]?.content,
+      tasks: result.tasks,
+      chatHistory: result.messages,
+      files: result.files,
     })
 
   } catch (error) {
@@ -73,9 +37,16 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   // 获取当前状态
+  const status = orchestrator.getStatus()
+  
   return NextResponse.json({
-    tasks: taskManager.getAllTasks(),
-    chatHistory: chatManager.getHistory(),
-    agents: agentManager.getAgentInfo()
+    tasks: status.tasks,
+    chatHistory: status.messages,
+    stats: status.stats,
+    agents: [
+      { id: 'pm-agent-1', name: 'PM Agent', role: 'pm', description: '负责需求分析、任务拆分和团队协调' },
+      { id: 'dev-agent-1', name: 'Dev Agent', role: 'dev', description: '负责代码实现和功能开发' },
+      { id: 'review-agent-1', name: 'Review Agent', role: 'review', description: '负责代码审查和质量保证' },
+    ],
   })
 }
