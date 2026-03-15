@@ -214,7 +214,7 @@ export default function DemoPage() {
       </header>
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6">
-        <div className="glass rounded-2xl p-6 min-h-[60vh] max-h-[70vh] overflow-y-auto border border-dark-100">
+        <div className="glass rounded-2xl p-6 min-h-[60vh] max-h-[70vh] overflow-y-auto hide-scrollbar border border-dark-100">
           <div className="text-center py-8 border-b border-dark-100 mb-6">
             <h2 className="text-2xl font-bold text-white mb-2">Team Chat</h2>
             <p className="text-gray-400 text-sm">Watch your AI team collaborate in real-time</p>
