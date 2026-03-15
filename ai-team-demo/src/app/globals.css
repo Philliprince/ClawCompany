@@ -31,4 +31,13 @@ body {
   .glow-border {
     @apply border border-primary-500/30 shadow-[0_0_20px_rgba(255,88,51,0.2)];
   }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
