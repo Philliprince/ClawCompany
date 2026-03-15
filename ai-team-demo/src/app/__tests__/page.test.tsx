@@ -12,8 +12,8 @@ describe('Landing Page', () => {
   it('应该显示 CTA 按钮', () => {
     render(<Home />)
     
-    expect(screen.getByRole('link', { name: /Try Demo/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Learn More/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Start Chatting/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /View Demo/i })).toBeInTheDocument()
   })
 
   it('应该显示三个 Agent 卡片', () => {
@@ -32,10 +32,10 @@ describe('Landing Page', () => {
     expect(screen.getByText('Code Reviewer')).toBeInTheDocument()
   })
 
-  it('CTA 按钮应该链接到 /demo', () => {
+  it('CTA 按钮应该链接到 /chat', () => {
     render(<Home />)
     
-    const demoLink = screen.getByRole('link', { name: /Try Demo/i })
-    expect(demoLink).toHaveAttribute('href', '/demo')
+    const chatLink = screen.getByRole('link', { name: /Start Chatting/i })
+    expect(chatLink).toHaveAttribute('href', '/chat')
   })
 })

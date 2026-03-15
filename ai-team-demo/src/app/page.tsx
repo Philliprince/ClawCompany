@@ -96,14 +96,17 @@ export default function Home() {
             className="flex gap-4 justify-center"
           >
             <Link
-              href="/demo"
+              href="/chat"
               className="px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:scale-105"
             >
-              Try Demo →
+              Start Chatting →
             </Link>
-            <button className="px-8 py-4 glass text-white font-semibold rounded-xl hover:bg-dark-100 transition-all duration-300">
-              Learn More
-            </button>
+            <Link
+              href="/demo"
+              className="px-8 py-4 glass text-white font-semibold rounded-xl hover:bg-dark-100 transition-all duration-300"
+            >
+              View Demo
+            </Link>
           </motion.div>
         </motion.div>
         
