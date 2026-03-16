@@ -433,8 +433,8 @@ export class MockProvider implements LLMProvider {
 
 ### GitHub 统计
 
-- Commits: 15+
-- 代码行数: ~3000 行
+- Commits: 29
+- 代码行数: ~3650 行（核心代码）
 - 文件数: ~50 个
 - Stars: (待添加)
 
