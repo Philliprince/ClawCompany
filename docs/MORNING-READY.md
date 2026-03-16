@@ -1,11 +1,11 @@
 # 🌅 白天醒来后的任务清单
 
-**当前时间：** 2026-03-16 07:22
+**当前时间：** 2026-03-16 09:08（已更新）
 **距离比赛截止：** 3 天（3月19日）
 
 ---
 
-## ✅ 已完成的工作（凌晨 4:19 - 7:22）
+## ✅ 已完成的工作（凌晨 4:19 - 9:08）
 
 ### 1. Mock Provider（04:19）
 - ✅ 创建 MockProvider，提供快速预设响应
@@ -40,11 +40,17 @@
 - ✅ 5 个区域布局、配色方案、字体建议
 - ✅ 快速制作步骤（使用 Canva）
 
+### 7. README 和项目说明书更新（09:08）
+- ✅ 重写 README.md，完整的项目介绍
+- ✅ 填入真实的 GitHub 统计数据
+- ✅ 更新测试数据（45 用例, 100% 通过）
+- ✅ 添加 toggle-mock.sh 脚本，方便切换模式
+
 ---
 
 ## 🎯 白天需要完成的任务（优先级排序）
 
-### 优先级 1：录制 Demo 视频（最重要）
+### 优先级 1：录制 Demo 视频（最重要）⏳
 **时间估算：** 1-2 小时
 
 **步骤：**
@@ -52,13 +58,13 @@
 2. 启用 Mock 模式：
    ```bash
    cd /Users/felixmiao/Projects/ClawCompany/ai-team-demo
-   echo "USE_MOCK_LLM=true" >> .env.local
+   ./toggle-mock.sh  # 选择 y 启用 Mock 模式
+   ./dev.sh          # 启动服务器
    ```
-3. 启动服务器：`./dev.sh`
-4. 打开浏览器：http://localhost:3000
-5. 按照 `docs/DEMO-RECORDING-CHECKLIST.md` 录制
-6. 录制完成后关闭 Mock 模式
-7. 重启服务器测试真实 API
+3. 打开浏览器：http://localhost:3000
+4. 按照 `docs/DEMO-RECORDING-CHECKLIST.md` 录制
+5. 录制完成后关闭 Mock 模式（再次运行 toggle-mock.sh）
+6. 重启服务器测试真实 API
 
 **文档参考：**
 - `docs/DEMO-RECORDING-CHECKLIST.md` - 详细步骤
@@ -67,19 +73,12 @@
 ---
 
 ### 优先级 2：填充项目说明书内容
-**时间估算：** 2-3 小时
+**时间估算：** 1-2 小时
 
 **步骤：**
-1. 打开 `docs/PROJECT-DESCRIPTION.md`
-2. 根据实际项目情况填充内容
-3. 添加实际数据（commits、代码行数、测试覆盖率等）
-4. 添加截图（从 demo 视频中截取）
-5. 导出为 PDF（使用 Typora、Pandoc 或在线工具）
-
-**提示：**
-- 可以使用 AI 工具帮助润色文字
-- 截图要清晰，展示关键功能
-- PDF 要美观，注意排版
+1. 从 Demo 视频中截取关键画面
+2. 添加截图到 PROJECT-DESCRIPTION.md
+3. 导出为 PDF（使用 Typora、Pandoc 或在线工具）
 
 ---
 
@@ -93,22 +92,6 @@
 4. 替换内容为 ClawCompany 的信息
 5. 添加二维码（GitHub 仓库）
 6. 导出为 PDF（打印）和 PNG（网络）
-
-**文档参考：**
-- `docs/POSTER-DESIGN.md` - 设计指南
-- `docs/PROJECT-DESCRIPTION.md` - 内容来源
-
----
-
-### 优先级 4：最终测试和优化
-**时间估算：** 1 小时
-
-**步骤：**
-1. 运行所有测试：`npm test`
-2. 测试真实 API（关闭 Mock 模式）
-3. 检查所有页面是否正常
-4. 修复发现的 bug
-5. 最后一次 commit 和 push
 
 ---
 
