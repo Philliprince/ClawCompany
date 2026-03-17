@@ -9,11 +9,43 @@
 
 **截止日期：** 2026-03-19（还有2天）
 
-**当前时间：** 16:34
-**下次检查：** 17:00 (heartbeat)
+**当前时间：** 19:16
+**下次检查：** 20:00 (heartbeat)
 
-**上次 commit：** 2026-03-17 12:15:14（4小时19分钟前）
-**状态：** 距离上次 commit > 1小时 → **需要继续开发并 commit**
+**上次 commit：** 2026-03-17 19:13（3分钟前）
+**状态：** 刚完成 E2E 验证 ✅
+
+---
+
+## ⚠️ Demo 录制前提条件（新增 19:16）
+
+**必须满足以下条件才能开始录 Demo 视频：**
+
+1. **✅ Playwright E2E 测试通过**
+   ```bash
+   cd /Users/felixmiao/Projects/ClawCompany/ai-team-demo
+   npx playwright test e2e/demo.spec.ts --reporter=list
+   ```
+
+2. **✅ 所有测试用例通过**
+   - Landing Page 正常显示
+   - Team Portal 正常显示
+   - PM Agent 正常响应
+   - Dev Agent 正常响应
+   - Review Agent 正常响应
+   - 完整协作流程成功
+
+3. **✅ 真实 API 调用验证**
+   - 服务器日志显示 `Calling real GLM-5 API`
+   - 响应时间合理（2-5秒）
+   - 内容符合期待
+
+4. **✅ 只有全部通过后，才能开始录 Demo 视频**
+
+**当前状态：**
+- ✅ E2E 测试已通过（19:13）
+- ✅ 真实 API 调用已验证（2.4秒）
+- ✅ **可以开始录 Demo 视频**
 
 ---
 
@@ -69,9 +101,9 @@
 
 ---
 
-### 🔄 14:00-15:00 - 验证真实 PM Agent
+### ✅ 14:00-15:00 - 验证真实 PM Agent（已完成）
 
-**当前任务：**
+**完成内容：**
 - [x] 验证真实 GLM-5 API 是否工作 ✅
 - [x] 手动测试 PM Agent 响应 ✅
 - [x] 检查响应时间和内容质量 ✅
@@ -79,10 +111,49 @@
 - [x] 创建 OpenClaw API route ✅
 - [x] 添加模式切换 UI ✅
 
+### ✅ 17:08-17:15 - Hourly Check + Playwright 验证
+
+**完成内容：**
+- [x] 检查 commit 时间（约 2 小时前）
+- [x] 执行 Playwright 测试 ✅
+- [x] 更新 memory/2026-03-17.md ✅
+- [x] Commit 进度 ✅
+
+**测试结果：**
+- ✅ Landing Page 正常显示
+- ✅ Team Portal 正常显示
+- ✅ PM Agent 正常响应
+- ✅ Dev Agent 正常响应
+- ✅ Review Agent 正常响应
+- ✅ 完整协作流程成功
+
+### ✅ 17:15-17:20 - OpenClaw Gateway 调研
+
+**完成内容：**
+- [x] 找到 Gateway 端口（18789）
+- [x] 测试 health check（正常）
+- [x] 发现 OpenClaw 使用内部工具协议，非 REST API
+- [x] 做出架构决策：保留 GLM-5 API 模式，OpenClaw 作为未来工作
+- [x] Commit 决策
+
+**决策原因：**
+1. GLM-5 API 模式已经完整可用
+2. OpenClaw 集成需要更多时间
+3. 比赛截止日期紧迫（2 天）
+4. Demo 和比赛材料更重要
+
+### 🎯 17:20-18:00 - Demo 录制准备
+
+**当前任务：**
+- [ ] 准备 Demo 脚本
+- [ ] 测试 Demo 流程
+- [ ] 录制 Demo 视频
+- [ ] 准备比赛材料（PPT、文档）
+
 **下一步：**
-1. 测试 OpenClaw 模式连接
-2. 准备 Demo 录制
-3. 完成比赛材料
+1. **准备 Demo 脚本**
+2. **录制 Demo 视频**
+3. **完成比赛材料**
 
 ---
 
