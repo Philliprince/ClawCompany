@@ -14,12 +14,16 @@ interface Message {
   timestamp: Date
 }
 
+type Mode = 'glm' | 'openclaw'
+
 export default function TeamChatPage() {
   const [agents] = useState<AgentConfig[]>(defaultAgents)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentAgent, setCurrentAgent] = useState<string | null>(null)
+  const [mode, setMode] = useState<Mode>('glm') // 默认 GLM-5 直接模式
+  const [openclawConnected, setOpenclawConnected] = useState<boolean | null>(null)
 
   // 调用单个 Agent
   const callAgent = async (agent: AgentConfig, message: string) => {
@@ -173,6 +177,30 @@ export default function TeamChatPage() {
           </div>
           
           <div className="flex items-center gap-6">
+            {/* 模式切换 */}
+            <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1">
+              <button
+                onClick={() => setMode('glm')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  mode === 'glm' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                GLM-5
+              </button>
+              <button
+                onClick={() => setMode('openclaw')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  mode === 'openclaw' 
+                    ? 'bg-orange-600 text-white' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                OpenClaw
+              </button>
+            </div>
+            
             {/* Agent 状态 */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -313,9 +341,21 @@ export default function TeamChatPage() {
           
           <div className="mt-6 p-4 bg-blue-900/30 rounded-lg">
             <h3 className="font-semibold text-blue-400 mb-2">💡 使用说明</h3>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 mb-2">
               输入你的需求，产品经理会分析并拆分任务，开发者会实现功能，审查员会审查代码。
             </p>
+            <div className="text-xs text-gray-500 mt-2">
+              <div className="flex items-center gap-2 mb-1">
+                <div className={`w-2 h-2 rounded-full ${mode === 'glm' ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                <span>当前模式: {mode === 'glm' ? 'GLM-5 直接调用' : 'OpenClaw 集成'}</span>
+              </div>
+              {mode === 'openclaw' && (
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${openclawConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span>OpenClaw: {openclawConnected ? '已连接' : '未连接'}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

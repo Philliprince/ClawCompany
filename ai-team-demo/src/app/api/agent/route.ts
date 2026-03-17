@@ -104,15 +104,20 @@ export async function POST(request: NextRequest) {
     const apiKey = SecurityManager.getFromEnv()
     const useMock = process.env.USE_MOCK_LLM === 'true'
 
+    console.log('[Agent API] useMock:', useMock)
+    console.log('[Agent API] hasApiKey:', !!apiKey)
+
     let agentMessage: string
 
     if (useMock || !apiKey) {
       // Mock 模式：快速响应，用于 Demo
+      console.log('[Agent API] Using Mock mode')
       await new Promise(resolve => setTimeout(resolve, 800)) // 模拟延迟
       
       agentMessage = generateMockResponse(agentId, userMessage)
     } else {
       // 真实调用 GLM-5
+      console.log('[Agent API] Calling real GLM-5 API')
       const response = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
         method: 'POST',
         headers: {
