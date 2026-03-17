@@ -66,6 +66,9 @@ export default function TeamChatPage() {
     setInput('')
     setIsLoading(true)
 
+    // 计时开始
+    const startTime = Date.now()
+
     // 添加用户消息
     addMessage(
       { id: 'user', name: 'You', emoji: '👤', color: '#6B7280' } as any,
@@ -77,14 +80,16 @@ export default function TeamChatPage() {
       const pmAgent = agents.find(a => a.id === 'pm-agent')!
       addMessage(pmAgent, '正在分析需求...')
       
+      const pmStartTime = Date.now()
       const pmResponse = await callAgent(pmAgent, userMessage)
+      const pmDuration = ((Date.now() - pmStartTime) / 1000).toFixed(1)
       
       // 更新 PM Agent 消息
       setMessages(prev => {
         const newMsgs = [...prev]
         const lastPmMsg = newMsgs.find(m => m.agentId === 'pm-agent' && m.content === '正在分析需求...')
         if (lastPmMsg) {
-          lastPmMsg.content = pmResponse
+          lastPmMsg.content = pmResponse + `\n\n⏱️ 用时：${pmDuration}秒`
         }
         return newMsgs
       })
@@ -93,10 +98,12 @@ export default function TeamChatPage() {
       const devAgent = agents.find(a => a.id === 'dev-agent')!
       addMessage(devAgent, '正在实现功能...')
       
+      const devStartTime = Date.now()
       const devResponse = await callAgent(
         devAgent,
         `用户需求：${userMessage}\n\nPM 分析：${pmResponse}\n\n请实现这个功能，生成完整的代码。`
       )
+      const devDuration = ((Date.now() - devStartTime) / 1000).toFixed(1)
       
       // 更新 Dev Agent 消息
       setMessages(prev => {
@@ -106,7 +113,7 @@ export default function TeamChatPage() {
           m.content === '正在实现功能...'
         )
         if (lastDevMsg) {
-          lastDevMsg.content = devResponse
+          lastDevMsg.content = devResponse + `\n\n⏱️ 用时：${devDuration}秒`
         }
         return newMsgs
       })
@@ -115,10 +122,12 @@ export default function TeamChatPage() {
       const reviewAgent = agents.find(a => a.id === 'review-agent')!
       addMessage(reviewAgent, '正在审查代码...')
       
+      const reviewStartTime = Date.now()
       const reviewResponse = await callAgent(
         reviewAgent,
         `审查以下代码实现：\n\n用户需求：${userMessage}\n\n代码：\n${devResponse}`
       )
+      const reviewDuration = ((Date.now() - reviewStartTime) / 1000).toFixed(1)
       
       // 更新 Review Agent 消息
       setMessages(prev => {
@@ -128,15 +137,18 @@ export default function TeamChatPage() {
           m.content === '正在审查代码...'
         )
         if (lastReviewMsg) {
-          lastReviewMsg.content = reviewResponse
+          lastReviewMsg.content = reviewResponse + `\n\n⏱️ 用时：${reviewDuration}秒`
         }
         return newMsgs
       })
 
+      // 计算总用时
+      const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1)
+
       // 添加完成消息
       addMessage(
         { id: 'system', name: 'System', emoji: '🎉', color: '#FF5833' } as any,
-        '团队协作完成！'
+        `团队协作完成！\n\n📊 性能统计：\n• PM Agent: ${pmDuration}秒\n• Dev Agent: ${devDuration}秒\n• Review Agent: ${reviewDuration}秒\n• 总用时: ${totalDuration}秒`
       )
 
     } catch (error) {
