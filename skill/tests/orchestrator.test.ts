@@ -6,12 +6,23 @@
 
 import { ClawCompanyOrchestrator } from '../src/orchestrator'
 
+// 声明全局类型扩展
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace NodeJS {
+    interface Global {
+      sessions_spawn: jest.Mock
+      sessions_history: jest.Mock
+    }
+  }
+}
+
 // Mock OpenClaw 全局工具
 const mockSessionsSpawn = jest.fn()
 const mockSessionsHistory = jest.fn()
 
-global.sessions_spawn = mockSessionsSpawn
-global.sessions_history = mockSessionsHistory
+;(global as any).sessions_spawn = mockSessionsSpawn
+;(global as any).sessions_history = mockSessionsHistory
 
 describe('ClawCompany Orchestrator', () => {
   let orchestrator: ClawCompanyOrchestrator

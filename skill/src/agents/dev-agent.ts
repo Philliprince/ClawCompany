@@ -2,10 +2,16 @@
  * Dev Agent (开发者)
  * 
  * 职责：实现功能、生成代码、确保可运行
+ * 
+ * 注意：sessions_spawn, sessions_history 是 OpenClaw 的内置工具，
+ * 在 OpenClaw 环境中全局可用，无需导入。
  */
 
-import { sessions_spawn, sessions_history } from 'openclaw'
 import type { Task, DevResult } from '../orchestrator'
+
+// 声明 OpenClaw 全局工具（用于类型检查）
+declare const sessions_spawn: typeof import('openclaw').sessions_spawn
+declare const sessions_history: typeof import('openclaw').sessions_history
 
 export interface DevAgentConfig {
   runtime?: 'acp' | 'subagent'
