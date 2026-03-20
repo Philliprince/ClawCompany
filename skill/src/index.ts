@@ -4,7 +4,9 @@
  * 让一个人也能像拥有一支完整团队一样工作
  */
 
-export { ClawCompanyOrchestrator } from './orchestrator'
+import { ClawCompanyOrchestrator } from './orchestrator'
+
+export { ClawCompanyOrchestrator }
 export type { 
   Task, 
   PMResult, 
@@ -32,7 +34,6 @@ export async function createProject(
   userRequest: string,
   projectPath?: string
 ) {
-  const { ClawCompanyOrchestrator } = await import('./orchestrator')
   const orchestrator = new ClawCompanyOrchestrator()
   return await orchestrator.execute(userRequest, projectPath)
 }

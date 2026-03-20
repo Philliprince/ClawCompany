@@ -7,6 +7,10 @@
  * 在 OpenClaw 环境中全局可用，无需导入。
  */
 
+// 声明 OpenClaw 全局工具（用于类型检查）
+declare const sessions_spawn: typeof import('openclaw').sessions_spawn
+declare const sessions_history: typeof import('openclaw').sessions_history
+
 export interface Task {
   id: string
   title: string

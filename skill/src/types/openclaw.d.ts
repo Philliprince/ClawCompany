@@ -1,11 +1,11 @@
 /**
- * OpenClaw 内置工具类型声明
+ * OpenClaw 类型声明
  * 
  * 这些工具在 OpenClaw 环境中全局可用
  */
 
-declare global {
-  interface SessionsSpawnOptions {
+declare module 'openclaw' {
+  export interface SpawnOptions {
     runtime?: 'subagent' | 'acp'
     task: string
     thinking?: 'low' | 'medium' | 'high'
@@ -13,42 +13,28 @@ declare global {
     model?: string
     agentId?: string
     cwd?: string
-    timeoutSeconds?: number
-    thread?: boolean
-    cleanup?: 'delete' | 'keep'
-    label?: string
   }
 
-  interface SessionsSpawnResult {
+  export interface SessionResult {
     sessionKey: string
     status: 'running' | 'completed' | 'failed'
   }
 
-  interface SessionsHistoryOptions {
+  export interface HistoryOptions {
     sessionKey: string
     limit?: number
     includeTools?: boolean
   }
 
-  interface SessionsHistoryResult {
+  export interface HistoryResult {
     messages: Array<{
       role: string
       content: string
-      timestamp?: string
     }>
   }
 
-  interface SessionsSendOptions {
-    message: string
-    sessionKey?: string
-    label?: string
-    agentId?: string
-    timeoutSeconds?: number
-  }
-
-  function sessions_spawn(options: SessionsSpawnOptions): Promise<SessionsSpawnResult>
-  function sessions_history(options: SessionsHistoryOptions): Promise<SessionsHistoryResult>
-  function sessions_send(options: SessionsSendOptions): Promise<void>
+  export function sessions_spawn(options: SpawnOptions): Promise<SessionResult>
+  export function sessions_history(options: HistoryOptions): Promise<HistoryResult>
+  export function sessions_send(options: { sessionKey: string; message: string }): Promise<void>
+  export function sessions_yield(options?: { message?: string }): Promise<void>
 }
-
-export {}
