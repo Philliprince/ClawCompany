@@ -1,34 +1,39 @@
 # HEARTBEAT.md - ClawCompany 自动优化
 
-## 每2小时检查任务
+## Cron 任务配置
 
-### 检查项
-1. [ ] ClawCompany 是否有新 commit（最近2小时）
-2. [ ] OpenCode 是否正在运行（检查进程）
-3. [ ] 是否有待处理的任务
+### 每2小时迭代任务
+- **任务名**: clawcompany-iterate
+- **频率**: 每 2 小时
+- **工作目录**: `/Users/felixmiao/Projects/ClawCompany`
+- **执行内容**:
+  1. 调用 OpenCode 检查项目代码
+  2. 分析改进点（代码质量、测试覆盖、文档、架构）
+  3. 选择最有价值的改进
+  4. 用 OpenCode 实现（TDD优先）
+  5. 提交代码
+  6. 报告结果
 
-### 如果都为否，执行以下操作之一：
-- [ ] 让 OpenCode 建议下一个优化点
-- [ ] 完善测试用例
-- [ ] 代码质量改进
-- [ ] 文档更新
+### 每天早上8点研究任务
+- **任务名**: daily-multiagent-research
+- **频率**: 每天 08:00 (Asia/Shanghai)
+- **执行内容**:
+  1. 搜索前沿多 agent 项目
+  2. 分析特点和创新点
+  3. 与 ClawCompany 对比
+  4. 提供启发建议
 
-### 工作流程
-1. 检查 `git log --since="2 hours ago"` 
-2. 检查 `pgrep -f opencode`
-3. 如果都无，调用 OpenCode 获取建议
-4. 我来做决策并审查结果
-5. 提交并通过
+## 项目结构
 
-### Cron 设置
-```bash
-openclaw cron add --id clawcompany-check --schedule "0 */2 * * *" --message "检查 ClawCompany 状态，如果没有新 commit 且 OpenCode 不活跃，建议优化点"
+```
+/Users/felixmiao/Projects/ClawCompany/
+├── ai-team-demo/      # Next.js 应用
+├── skill/             # OpenClaw Skill
+├── docs/              # 文档
+├── scripts/           # 工具脚本
+├── memory/            # 开发日志
+└── README.md          # 项目说明
 ```
 
-### 记录
-| 时间 | 操作 | 结果 |
-|------|------|------|
-| 2026-03-30 16:52 | 设置自动优化 | ✅ HEARTBEAT.md 创建 |
-
 ---
-*此文件由 main agent 维护，每2小时检查一次*
+*最后更新: 2026-03-30 21:46*
