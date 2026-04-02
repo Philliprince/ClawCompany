@@ -12,6 +12,7 @@ describe('GLMProvider', () => {
 
   beforeEach(() => {
     glmProvider = new GLMProvider({
+      provider: 'glm',
       apiKey: mockApiKey
     })
     jest.clearAllMocks()
@@ -29,7 +30,7 @@ describe('GLMProvider', () => {
 
     it('应该在缺少 API key 时抛出错误', () => {
       expect(() => {
-        new GLMProvider({ apiKey: '' })
+        new GLMProvider({ provider: 'glm', apiKey: '' })
       }).toThrow('GLM API key is required')
     })
   })

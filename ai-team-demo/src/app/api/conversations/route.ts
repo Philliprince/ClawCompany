@@ -1,176 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { StorageManager } from '@/lib/storage/manager'
-import { InputValidator, RateLimiter } from '@/lib/security/utils'
-
-/**
- * Conversations API - 对话管理接口
- * 
- * 功能：
- * - 创建/读取/更新/删除对话
- * - 列出对话
- * - 添加消息
- * - 搜索对话
- */
+import { InputValidator } from '@/lib/security/utils'
+import { withRateLimit, withErrorHandling, successResponse, errorResponse } from '@/lib/api/route-utils'
 
 const storageManager = new StorageManager()
 
-/**
- * POST - 创建新对话
- */
-export async function POST(request: NextRequest) {
-  try {
-    const clientId = request.headers.get('x-forwarded-for') || 'unknown'
-    if (!RateLimiter.isAllowed(clientId)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Rate limit exceeded'
-      }, { status: 429 })
-    }
+export const POST = withRateLimit(async (request: NextRequest) => {
+  const body = await request.json()
+  const { title } = body
 
-    const body = await request.json()
-    const { title } = body
-
-    if (!title || typeof title !== 'string') {
-      return NextResponse.json({
-        success: false,
-        error: 'Conversation title is required'
-      }, { status: 400 })
-    }
-
-    // 清理标题
-    const sanitizedTitle = InputValidator.sanitize(title)
-
-    // 创建对话
-    const conversation = storageManager.createConversation(sanitizedTitle)
-    
-    // 保存
-    await storageManager.saveConversation(conversation)
-
-    return NextResponse.json({
-      success: true,
-      conversation
-    })
-
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+  if (!title || typeof title !== 'string') {
+    return errorResponse(new Error('Conversation title is required'), 400)
   }
-}
 
-/**
- * GET - 获取对话或列表
- */
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const conversationId = searchParams.get('id')
+  const sanitizedTitle = InputValidator.sanitize(title)
+  const conversation = storageManager.createConversation(sanitizedTitle)
+  await storageManager.saveConversation(conversation)
 
-    if (conversationId) {
-      // 获取单个对话
-      const conversation = await storageManager.loadConversation(conversationId)
+  return successResponse({ conversation }, request)
+}, 'Conversations API')
 
-      if (!conversation) {
-        return NextResponse.json({
-          success: false,
-          error: 'Conversation not found'
-        }, { status: 404 })
-      }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url)
+  const conversationId = searchParams.get('id')
 
-      return NextResponse.json({
-        success: true,
-        conversation
-      })
-    }
-
-    // 列出所有对话
-    const conversations = await storageManager.listConversations()
-
-    return NextResponse.json({
-      success: true,
-      conversations,
-      total: conversations.length
-    })
-
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
-  }
-}
-
-/**
- * PUT - 更新对话
- */
-export async function PUT(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { conversationId, title } = body
-
-    if (!conversationId) {
-      return NextResponse.json({
-        success: false,
-        error: 'Conversation ID is required'
-      }, { status: 400 })
-    }
-
+  if (conversationId) {
     const conversation = await storageManager.loadConversation(conversationId)
 
     if (!conversation) {
-      return NextResponse.json({
-        success: false,
-        error: 'Conversation not found'
-      }, { status: 404 })
+      return errorResponse(new Error('Conversation not found'), 404)
     }
 
-    // 更新
-    if (title) {
-      conversation.title = InputValidator.sanitize(title)
-      conversation.updatedAt = new Date().toISOString()
-    }
-
-    await storageManager.saveConversation(conversation)
-
-    return NextResponse.json({
-      success: true,
-      conversation
-    })
-
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    return successResponse({ conversation })
   }
-}
 
-/**
- * DELETE - 删除对话
- */
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const conversationId = searchParams.get('id')
+  const conversations = await storageManager.listConversations()
 
-    if (!conversationId) {
-      return NextResponse.json({
-        success: false,
-        error: 'Conversation ID is required'
-      }, { status: 400 })
-    }
+  return successResponse({ conversations, total: conversations.length })
+}, 'Conversations API')
 
-    await storageManager.deleteConversation(conversationId)
+export const PUT = withErrorHandling(async (request: NextRequest) => {
+  const body = await request.json()
+  const { conversationId, title } = body
 
-    return NextResponse.json({
-      success: true
-    })
-
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+  if (!conversationId) {
+    return errorResponse(new Error('Conversation ID is required'), 400)
   }
-}
+
+  const conversation = await storageManager.loadConversation(conversationId)
+
+  if (!conversation) {
+    return errorResponse(new Error('Conversation not found'), 404)
+  }
+
+  if (title) {
+    conversation.title = InputValidator.sanitize(title)
+    conversation.updatedAt = new Date().toISOString()
+  }
+
+  await storageManager.saveConversation(conversation)
+
+  return successResponse({ conversation })
+}, 'Conversations API')
+
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url)
+  const conversationId = searchParams.get('id')
+
+  if (!conversationId) {
+    return errorResponse(new Error('Conversation ID is required'), 400)
+  }
+
+  await storageManager.deleteConversation(conversationId)
+
+  return successResponse({})
+}, 'Conversations API')
