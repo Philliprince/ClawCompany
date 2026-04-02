@@ -90,7 +90,7 @@ export class NavigationDebug {
       this.ensureTextObject(index);
       const text = this.textObjects[index];
       
-      let stateText = isNavigating ? `导航中: ${state}` : '空闲';
+      const stateText = isNavigating ? `导航中: ${state}` : '空闲';
       text.setText(stateText);
       text.setPosition(agent.x - 30, agent.y - 50);
     }

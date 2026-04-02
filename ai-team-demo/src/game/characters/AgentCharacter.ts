@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PHYSICS_CONFIG } from '../config/gameConfig';
 import { AnimationController, AnimationState } from '../systems/AnimationController';
 import { PathfindingSystem, PathPoint } from '../systems/PathfindingSystem';
+import { EmotionSystem, EmotionType } from '../systems/EmotionSystem';
 
 type NavigationState = 'idle' | 'moving' | 'jumping' | 'arrived';
 
@@ -19,6 +20,8 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   private currentPath: PathPoint[] = [];
   private arrivalCallback: (() => void) | null = null;
   private onArrivalCallbacks: (() => void)[] = [];
+  private emotionSystem: EmotionSystem;
+  private emotionBubble: Phaser.GameObjects.Container | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -31,6 +34,7 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
     super(scene, x, y, texture, frame);
 
     this.color = color;
+    this.emotionSystem = new EmotionSystem();
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
@@ -54,6 +58,8 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
         this.isWorking
       );
     }
+
+    this.updateEmotionBubble();
 
     if (this.isNavigating) {
       this.updateNavigation();
@@ -172,6 +178,67 @@ moveTo(targetX: number, targetY: number, onArrival?: () => void): void {
 
   clearArrivalCallbacks(): void {
     this.onArrivalCallbacks = [];
+  }
+
+  getEmotionSystem(): EmotionSystem {
+    return this.emotionSystem;
+  }
+
+  setEmotion(emotion: EmotionType, duration?: number): void {
+    this.emotionSystem.setEmotion(emotion, duration);
+  }
+
+  setEmotionFromTask(taskDescription: string): void {
+    const emotion = this.emotionSystem.getEmotionFromTask(taskDescription);
+    this.emotionSystem.setEmotion(emotion);
+  }
+
+  private updateEmotionBubble(): void {
+    const delta = this.scene.game.loop.delta;
+    const result = this.emotionSystem.update(delta);
+
+    if (!result.needsRedraw) return;
+
+    this.clearEmotionBubble();
+
+    const bubbleConfig = this.emotionSystem.getBubbleConfig(0, -40);
+    if (!bubbleConfig) return;
+
+    this.emotionBubble = this.scene.add.container(this.x, this.y + bubbleConfig.y);
+
+    const bg = this.scene.add.graphics();
+    const w = bubbleConfig.width;
+    const h = bubbleConfig.height;
+    bg.fillStyle(bubbleConfig.bgColor, 0.9);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    bg.lineStyle(2, 0xffffff, 0.5);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
+
+    const text = this.scene.add.text(0, 0, bubbleConfig.emoji, {
+      fontSize: '20px',
+    });
+    text.setOrigin(0.5);
+
+    this.emotionBubble.add([bg, text]);
+
+    if (bubbleConfig.animation.bounceAmplitude > 0) {
+      this.scene.tweens.add({
+        targets: this.emotionBubble,
+        y: this.y + bubbleConfig.y - bubbleConfig.animation.bounceAmplitude,
+        duration: bubbleConfig.animation.bounceDuration / 2,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+  }
+
+  private clearEmotionBubble(): void {
+    if (this.emotionBubble) {
+      this.scene.tweens.killTweensOf(this.emotionBubble);
+      this.emotionBubble.destroy();
+      this.emotionBubble = null;
+    }
   }
 }
 
