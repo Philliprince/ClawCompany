@@ -154,7 +154,7 @@ export class EmotionSystem {
     });
 
     if (this.history.length > this.maxHistory) {
-      this.history = this.history.slice(-this.maxHistory);
+      this.history.splice(0, this.history.length - this.maxHistory);
     }
 
     return true;

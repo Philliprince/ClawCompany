@@ -13,8 +13,8 @@ export class GameEventStore {
 
   push(event: GameEvent): void {
     this.events.push(event);
-    if (this.events.length > this.maxEvents) {
-      this.events = this.events.slice(-this.maxEvents);
+    while (this.events.length > this.maxEvents) {
+      this.events.shift();
     }
     this.notify(event);
   }

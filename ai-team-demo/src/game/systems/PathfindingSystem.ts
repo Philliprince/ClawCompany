@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { NavigationMesh, NavNode, PlatformNode } from '../data/NavigationMesh';
 import { TILE_SIZE } from '../config/gameConfig';
+import { MinHeap } from './MinHeap';
 
 export interface PathPoint {
   x: number;
@@ -121,7 +122,7 @@ export class PathfindingSystem {
   }
 
   private findGridPath(startX: number, startY: number, endX: number, endY: number): PathPoint[] {
-    const openSet: PathNode[] = [];
+    const openHeap = new MinHeap<PathNode>((a, b) => a.f - b.f);
     const closedSet = new Set<string>();
     
     const startNode: PathNode = {
@@ -133,11 +134,10 @@ export class PathfindingSystem {
       parent: null,
     };
     startNode.f = startNode.g + startNode.h;
-    openSet.push(startNode);
+    openHeap.push(startNode);
 
-    while (openSet.length > 0) {
-      openSet.sort((a, b) => a.f - b.f);
-      const current = openSet.shift()!;
+    while (openHeap.size() > 0) {
+      const current = openHeap.pop()!;
 
       if (current.x === endX && current.y === endY) {
         return this.reconstructPath(current);
@@ -157,7 +157,7 @@ export class PathfindingSystem {
         if (!node || !node.isWalkable) continue;
 
         const tentativeG = current.g + 1;
-        const existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
+        const existingNode = openHeap.find(n => n.x === neighbor.x && n.y === neighbor.y);
 
         if (!existingNode) {
           const newNode: PathNode = {
@@ -169,11 +169,12 @@ export class PathfindingSystem {
             parent: current,
           };
           newNode.f = newNode.g + newNode.h;
-          openSet.push(newNode);
+          openHeap.push(newNode);
         } else if (tentativeG < existingNode.g) {
-          existingNode.g = tentativeG;
-          existingNode.f = existingNode.g + existingNode.h;
-          existingNode.parent = current;
+          openHeap.decreaseKey(
+            { ...existingNode, g: tentativeG, f: tentativeG + existingNode.h, parent: current },
+            (item) => item.x === neighbor.x && item.y === neighbor.y
+          );
         }
       }
     }
