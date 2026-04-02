@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { SecurityManager, InputValidator, RateLimiter } from '../utils'
 
 describe('SecurityManager', () => {
