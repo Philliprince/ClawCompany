@@ -2,19 +2,20 @@
 
 ## Cron 任务配置
 
-### 每2小时迭代任务
+### 每 30 分钟迭代任务
 - **任务名**: clawcompany-iterate
-- **频率**: 每 2 小时
+- **频率**: 每 30 分钟
 - **工作目录**: `/Users/felixmiao/Projects/ClawCompany`
+- **详细 Prompt**: `~/.openclaw/workspace/memory/clawcompany-iterate-prompt.md`
 - **执行内容**:
-  1. 调用 OpenCode 检查项目代码
-  2. 分析改进点（代码质量、测试覆盖、文档、架构）
-  3. 选择最有价值的改进
-  4. 用 OpenCode 实现（TDD优先）
-  5. 提交代码
-  6. 报告结果
+  1. **检查项目状态**（测试、编译、覆盖率）
+  2. **Review 迭代计划**（`docs/phaser-iteration-plan.md` 和 `docs/phaser-version-progress.md`）
+  3. **优化迭代计划**（调整顺序、拆分任务、更新进度）
+  4. **执行改进**（使用 OpenCode + TDD）
+  5. **提交代码**（commit + push）
+  6. **更新进度文件**（记录完成状态和 commit hash）
 
-### 每天早上8点研究任务
+### 每天早上 8 点研究任务
 - **任务名**: daily-multiagent-research
 - **频率**: 每天 08:00 (Asia/Shanghai)
 - **执行内容**:
