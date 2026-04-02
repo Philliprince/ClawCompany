@@ -1,75 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { GitManager } from '@/lib/git/manager'
-import { InputValidator, RateLimiter } from '@/lib/security/utils'
-
-/**
- * Git API - Git 操作接口
- * 
- * 功能：
- * - 状态检查
- * - 自动提交
- * - 推送
- * - 分支管理
- * - 提交历史
- */
+import { InputValidator } from '@/lib/security/utils'
+import { withRateLimit, successResponse, errorResponse } from '@/lib/api/route-utils'
 
 const gitManager = new GitManager(process.cwd())
 
-/**
- * POST - 提交更改
- */
-export async function POST(request: NextRequest) {
-  try {
-    const clientId = request.headers.get('x-forwarded-for') || 'unknown'
-    if (!RateLimiter.isAllowed(clientId)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Rate limit exceeded'
-      }, { status: 429 })
-    }
+export const POST = withRateLimit(async (request: NextRequest) => {
+  const body = await request.json()
+  const { message, autoPush = false } = body
 
-    const body = await request.json()
-    const { message, autoPush = false } = body
-
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json({
-        success: false,
-        error: 'Commit message is required'
-      }, { status: 400 })
-    }
-
-    // 清理消息（防止注入）
-    const sanitizedMessage = InputValidator.sanitize(message)
-
-    // 提交
-    const result = autoPush 
-      ? await gitManager.commitAndPush(sanitizedMessage)
-      : await gitManager.commit(sanitizedMessage)
-
-    if (!result.success) {
-      return NextResponse.json({
-        success: false,
-        error: result.error
-      }, { status: 400 })
-    }
-
-    return NextResponse.json({
-      success: true,
-      commitHash: result.commitHash,
-      message: result.message
-    })
-
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+  if (!message || typeof message !== 'string') {
+    return errorResponse('Commit message is required', 400)
   }
-}
 
-/**
- * GET - 获取状态或历史
- */
+  const sanitizedMessage = InputValidator.sanitize(message)
+
+  const result = autoPush
+    ? await gitManager.commitAndPush(sanitizedMessage)
+    : await gitManager.commit(sanitizedMessage)
+
+  if (!result.success) {
+    return errorResponse(result.error || 'Commit failed', 400)
+  }
+
+  return successResponse({
+    commitHash: result.commitHash,
+    message: result.message,
+  }, request)
+}, 'Git API')
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -77,39 +36,21 @@ export async function GET(request: NextRequest) {
 
     if (action === 'status') {
       const status = await gitManager.status()
-      
-      return NextResponse.json({
-        success: true,
-        status
-      })
+      return successResponse({ status })
     }
 
     if (action === 'log') {
       const limit = parseInt(searchParams.get('limit') || '10')
       const log = await gitManager.log(limit)
-      
-      return NextResponse.json({
-        success: true,
-        log
-      })
+      return successResponse({ log })
     }
 
-    return NextResponse.json({
-      success: false,
-      error: 'Invalid action'
-    }, { status: 400 })
-
+    return errorResponse('Invalid action', 400)
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    return errorResponse(error, 500, 'Git API')
   }
 }
 
-/**
- * PUT - 分支操作
- */
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
@@ -117,45 +58,24 @@ export async function PUT(request: NextRequest) {
 
     if (action === 'create') {
       if (!branchName || !InputValidator.validateAgentId(branchName)) {
-        return NextResponse.json({
-          success: false,
-          error: 'Invalid branch name'
-        }, { status: 400 })
+        return errorResponse('Invalid branch name', 400)
       }
 
       await gitManager.createBranch(branchName)
-
-      return NextResponse.json({
-        success: true,
-        branch: branchName
-      })
+      return successResponse({ branch: branchName })
     }
 
     if (action === 'checkout') {
       if (!branchName) {
-        return NextResponse.json({
-          success: false,
-          error: 'Branch name is required'
-        }, { status: 400 })
+        return errorResponse('Branch name is required', 400)
       }
 
       await gitManager.checkout(branchName)
-
-      return NextResponse.json({
-        success: true,
-        branch: branchName
-      })
+      return successResponse({ branch: branchName })
     }
 
-    return NextResponse.json({
-      success: false,
-      error: 'Invalid action'
-    }, { status: 400 })
-
+    return errorResponse('Invalid action', 400)
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    return errorResponse(error, 500, 'Git API')
   }
 }

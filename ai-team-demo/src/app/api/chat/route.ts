@@ -1,45 +1,29 @@
-// API 路由 - 处理聊天请求
-
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { orchestrator } from '@/lib/orchestrator'
+import { withRateLimit, withErrorHandling, successResponse, errorResponse } from '@/lib/api/route-utils'
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const userMessage = body.message
+export const POST = withRateLimit(async (request: NextRequest) => {
+  const body = await request.json()
+  const userMessage = body.message
 
-    if (!userMessage) {
-      return NextResponse.json(
-        { error: '消息不能为空' },
-        { status: 400 }
-      )
-    }
-
-    // 执行完整的 Agent 协作流程
-    const result = await orchestrator.executeUserRequest(userMessage)
-
-    return NextResponse.json({
-      success: result.success,
-      message: result.messages[result.messages.length - 1]?.content,
-      tasks: result.tasks,
-      chatHistory: result.messages,
-      files: result.files,
-    })
-
-  } catch (error) {
-    console.error('Chat API error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+  if (!userMessage) {
+    return errorResponse({ error: '消息不能为空' }, 400)
   }
-}
 
-export async function GET() {
-  // 获取当前状态
+  const result = await orchestrator.executeUserRequest(userMessage)
+
+  return successResponse({
+    message: result.messages[result.messages.length - 1]?.content,
+    tasks: result.tasks,
+    chatHistory: result.messages,
+    files: result.files,
+  }, request)
+}, 'Chat API')
+
+export const GET = withErrorHandling(async () => {
   const status = orchestrator.getStatus()
-  
-  return NextResponse.json({
+
+  return successResponse({
     tasks: status.tasks,
     chatHistory: status.messages,
     stats: status.stats,
@@ -49,4 +33,4 @@ export async function GET() {
       { id: 'review-agent-1', name: 'Reviewer Claw', role: 'review', description: '负责代码审查和质量保证' },
     ],
   })
-}
+}, 'Chat Status API')
