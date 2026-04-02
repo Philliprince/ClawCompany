@@ -220,10 +220,15 @@ export class ParticleSystem {
   }
 
   update(deltaMs: number): void {
-    this.activeEffects = this.activeEffects.filter((effect) => {
+    let writeIdx = 0;
+    for (let i = 0; i < this.activeEffects.length; i++) {
+      const effect = this.activeEffects[i];
       effect.remainingLifespan -= deltaMs;
-      return effect.remainingLifespan > 0;
-    });
+      if (effect.remainingLifespan > 0) {
+        this.activeEffects[writeIdx++] = effect;
+      }
+    }
+    this.activeEffects.length = writeIdx;
   }
 
   getActiveEffectCount(): number {
@@ -261,8 +266,8 @@ export class ParticleSystem {
     timestamp: number
   ): void {
     this.history.push({ type, agentId, x, y, timestamp });
-    if (this.history.length > MAX_HISTORY) {
-      this.history = this.history.slice(-MAX_HISTORY);
+    while (this.history.length > MAX_HISTORY) {
+      this.history.shift();
     }
   }
 }

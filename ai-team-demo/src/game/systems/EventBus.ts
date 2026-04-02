@@ -52,12 +52,17 @@ export class EventBus {
     this.addToHistory(event);
 
     const specificHandlers = this.handlers.get(event.type);
-    const allHandlers = [
-      ...(specificHandlers ?? []),
-      ...this.wildcardHandlers,
-    ];
+    if (specificHandlers) {
+      for (const handler of specificHandlers) {
+        try {
+          handler(event);
+        } catch {
+          // continue to next handler
+        }
+      }
+    }
 
-    for (const handler of allHandlers) {
+    for (const handler of this.wildcardHandlers) {
       try {
         handler(event);
       } catch {
@@ -90,8 +95,8 @@ export class EventBus {
 
   private addToHistory(event: GameEvent): void {
     this.history.push(event);
-    if (this.history.length > this.maxHistorySize) {
-      this.history = this.history.slice(-this.maxHistorySize);
+    while (this.history.length > this.maxHistorySize) {
+      this.history.shift();
     }
   }
 }
