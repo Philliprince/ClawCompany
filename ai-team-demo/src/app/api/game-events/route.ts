@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+
 import { getGameEventStore } from '@/game/data/GameEventStore';
 
 export async function GET(request: NextRequest) {

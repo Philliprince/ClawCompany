@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+
 import { PathfindingSystem, PathPoint } from './PathfindingSystem';
 import { NavigationMesh } from '../data/NavigationMesh';
 import { TILE_SIZE } from '../config/gameConfig';

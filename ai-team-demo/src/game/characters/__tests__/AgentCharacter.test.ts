@@ -1,5 +1,6 @@
 import { EmotionSystem } from '../../systems/EmotionSystem';
 import { PathPoint } from '../../systems/PathfindingSystem';
+
 import type { AgentConfig } from '@/types/agent-config';
 
 interface AgentState {

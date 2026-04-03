@@ -1,8 +1,9 @@
-import { GitManager } from '../manager'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+
+import { GitManager } from '../manager'
 
 const execAsync = promisify(exec)
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+
 import { DashboardStore } from '@/game/data/DashboardStore';
 import { parseGameEvent } from '@/game/types/GameEvents';
 

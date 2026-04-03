@@ -1,4 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
+
 import { useEventStream } from '../../hooks/useEventStream';
 import { DashboardStore } from '../../game/data/DashboardStore';
 
@@ -55,7 +56,7 @@ describe('useEventStream', () => {
 
   beforeEach(() => {
     MockEventSource.reset();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     globalThis.EventSource = MockEventSource as any;
   });
 

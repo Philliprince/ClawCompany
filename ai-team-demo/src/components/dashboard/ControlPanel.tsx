@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+
 import { GameEvent } from '@/game/types/GameEvents';
 
 const AGENTS = [

@@ -52,12 +52,13 @@ export class DevAgent extends BaseAgent {
     switch (this.mode) {
       case 'openclaw':
         return this.implementWithOpenClaw(task, context)
-      case 'llm':
+      case 'llm': {
         const llmProvider = getLLMProvider()
         if (llmProvider) {
           return this.implementWithLLM(task, context, llmProvider)
         }
         return this.implement(task, context)
+      }
       default:
         return this.implement(task, context)
     }

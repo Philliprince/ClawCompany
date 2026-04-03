@@ -4,7 +4,7 @@ import { promisify } from 'util'
 const execFileAsync = promisify(execFile)
 
 const BRANCH_NAME_RE = /^[a-zA-Z0-9._\-/]+$/
-const GIT_PATH_RE = /^[^\0;\|&$`"'!\n\r]+$/
+const GIT_PATH_RE = /^[^\0;|&$`"'!\n\r]+$/
 const COMMIT_MSG_RE = /^[^\0`$|&;!\n\r]+$/
 
 export interface GitStatus {

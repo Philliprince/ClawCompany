@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
+
 import { EventLog } from '../EventLog';
+
 import { GameEvent } from '@/game/types/GameEvents';
 
 const mockEvents: GameEvent[] = [

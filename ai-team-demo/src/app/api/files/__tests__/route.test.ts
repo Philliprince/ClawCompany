@@ -56,6 +56,7 @@ jest.mock('@/lib/security/utils', () => ({
 
 // Import after mocks
 import { POST, GET, PUT, DELETE } from '../route'
+
 import { RateLimiter } from '@/lib/security/utils'
 
 const getMockFsManager = () => (global as any).__mockFsManager__
