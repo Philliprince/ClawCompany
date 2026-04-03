@@ -57,6 +57,60 @@ describe('extractJSONObject', () => {
     expect(result).toEqual({ code: 'line1\nline2\nline3' })
   })
 
+  it('should skip non-JSON curly braces before the actual JSON', () => {
+    const response = 'Here is {analysis} and {plan}. Result: {"tasks": [], "status": "ok"}'
+    const result = extractJSONObject(response)
+    expect(result).not.toBeNull()
+    expect(result).toEqual({ tasks: [], status: 'ok' })
+  })
+
+  it('should extract the first valid JSON object when multiple exist', () => {
+    const response = 'First: {"a": 1} and second: {"b": 2}'
+    const result = extractJSONObject(response)
+    expect(result).toEqual({ a: 1 })
+  })
+
+  it('should handle text with curly brace in code examples before JSON', () => {
+    const response = 'Use `function() { return x; }` to get value.\n{"result": "success", "data": {}}'
+    const result = extractJSONObject(response)
+    expect(result).not.toBeNull()
+    expect(result).toEqual({ result: 'success', data: {} })
+  })
+
+  it('should handle nested JSON with surrounding brace text', () => {
+    const response = 'Config: {env}. Response: {"outer": {"inner": {"deep": true}}, "count": 1}'
+    const result = extractJSONObject(response)
+    expect(result).not.toBeNull()
+    expect(result).toEqual({ outer: { inner: { deep: true } }, count: 1 })
+  })
+
+  it('should extract JSON from markdown with link before it', () => {
+    const response = 'Check [this]{#link} for details.\n{"approved": true}'
+    const result = extractJSONObject(response)
+    expect(result).not.toBeNull()
+    expect(result).toEqual({ approved: true })
+  })
+
+  it('should handle JSON with string containing braces', () => {
+    const response = '{"code": "if (x) { return 1; }", "status": "ok"}'
+    const result = extractJSONObject(response)
+    expect(result).not.toBeNull()
+    expect(result).toEqual({ code: 'if (x) { return 1; }', status: 'ok' })
+  })
+
+  it('should extract JSON from LLM response with template-like text', () => {
+    const response = `Analysis complete.
+
+I considered {options} and {alternatives}.
+
+Here's my structured output:
+{"analysis": "done", "confidence": 0.95, "tasks": [{"name": "implement"}]}`
+    const result = extractJSONObject(response)
+    expect(result).not.toBeNull()
+    expect(result!.analysis).toBe('done')
+    expect(result!.confidence).toBe(0.95)
+  })
+
   it('should extract JSON from real-world PM agent response', () => {
     const response = `Based on my analysis:
 

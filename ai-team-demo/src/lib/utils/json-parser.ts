@@ -3,13 +3,46 @@ type SafeParseFailure = { success: false; error: string }
 type SafeParseResult<T> = SafeParseSuccess<T> | SafeParseFailure
 
 export function extractJSONObject(text: string): Record<string, unknown> | null {
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return null
-  try {
-    return JSON.parse(match[0]) as Record<string, unknown>
-  } catch {
-    return null
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue
+
+    let depth = 0
+    let inString = false
+    let escape = false
+
+    for (let j = i; j < text.length; j++) {
+      const ch = text[j]
+
+      if (escape) {
+        escape = false
+        continue
+      }
+
+      if (ch === '\\' && inString) {
+        escape = true
+        continue
+      }
+
+      if (ch === '"') {
+        inString = !inString
+        continue
+      }
+
+      if (inString) continue
+
+      if (ch === '{') depth++
+      else if (ch === '}') depth--
+
+      if (depth === 0) {
+        try {
+          return JSON.parse(text.slice(i, j + 1)) as Record<string, unknown>
+        } catch {
+          break
+        }
+      }
+    }
   }
+  return null
 }
 
 export function safeJsonParse<T = unknown>(

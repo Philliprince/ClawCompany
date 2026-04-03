@@ -22,6 +22,8 @@ import { OfficeDecorator } from '../ui/OfficeDecorator';
 import { ShadowRenderer } from '../sprites/ShadowRenderer';
 import { RoleVisuals } from '../sprites/RoleVisuals';
 
+type RoomName = 'pm-office' | 'dev-studio' | 'test-lab' | 'review-center';
+
 type TaskType = 'coding' | 'testing' | 'review' | 'meeting';
 
 interface Workstation {
@@ -96,7 +98,10 @@ export class OfficeScene extends Phaser.Scene {
   private shadowRenderer!: ShadowRenderer;
   private roleVisuals!: RoleVisuals;
   private shadowGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
+  private cachedShadowOffsetY: number = 0;
   private decorationGraphics: Phaser.GameObjects.Graphics[] = [];
+  private taskTimer: Phaser.Time.TimerEvent | null = null;
+  private workstationTimer: Phaser.Time.TimerEvent | null = null;
 
   private roomPositions: Record<string, { x: number; y: number }> = {
     'pm-office': { x: 350, y: 280 },
@@ -158,7 +163,7 @@ export class OfficeScene extends Phaser.Scene {
 
     const errorGraphics = this.add.graphics();
     errorGraphics.fillStyle(0xff4444, 1);
-    graphics.fillStar(3, 3, 4, 3, 1.5);
+    errorGraphics.fillStar(3, 3, 4, 3, 1.5);
     errorGraphics.generateTexture('particle-error', 6, 6);
     errorGraphics.destroy();
 
@@ -196,6 +201,7 @@ export class OfficeScene extends Phaser.Scene {
     this.throttleSystem = new ThrottleSystem();
     this.soundSystem = new SoundSystem();
     this.shadowRenderer = new ShadowRenderer();
+    this.cachedShadowOffsetY = this.shadowRenderer.getShadowDimensions(32, 32).offsetY;
     this.roleVisuals = new RoleVisuals();
     this.officeDecorator = new OfficeDecorator();
     this.targetMarker = new TargetMarker(this);
@@ -247,7 +253,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setupTaskSystem(): void {
-    this.time.addEvent({
+    this.taskTimer = this.time.addEvent({
       delay: 5000,
       callback: () => {
         this.triggerRandomTask();
@@ -483,13 +489,13 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setupWorkstationStatus(): void {
-    this.time.addEvent({
+    this.workstationTimer = this.time.addEvent({
       delay: 3000,
       callback: () => {
         this.tilemapData?.workstations.forEach((ws) => {
           if (Math.random() > 0.7) {
             ws.status = ws.status === 'idle' ? 'busy' : 'idle';
-            const agentIndex = this.tilemapData!.workstations.findIndex(w => w.id === ws.id);
+            const agentIndex = this.tilemapData?.workstations.findIndex(w => w.id === ws.id) ?? -1;
             if (agentIndex >= 0 && this.agents[agentIndex]) {
               this.agents[agentIndex].setWorking(ws.status === 'busy');
             }
@@ -517,7 +523,9 @@ export class OfficeScene extends Phaser.Scene {
         if (agent) agent.setWorking(working);
       },
       moveAgentToRoom: (agentId: string, room: string) => {
-        this.moveAgentToRoom(agentId, room as any);
+        if (room in this.roomPositions) {
+          this.moveAgentToRoom(agentId, room as RoomName);
+        }
       },
       moveAgentToPosition: (agentId: string, x: number, y: number) => {
         this.moveToPosition(agentId, x, y);
@@ -640,11 +648,11 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private syncShadows(): void {
+    const offsetY = this.cachedShadowOffsetY;
     this.shadowGraphics.forEach((gfx, agentId) => {
       const agent = this.agentMap.get(agentId);
       if (agent) {
-        const dims = this.shadowRenderer.getShadowDimensions(32, 32);
-        gfx.setPosition(agent.x, agent.y + dims.offsetY);
+        gfx.setPosition(agent.x, agent.y + offsetY);
       }
     });
   }
@@ -661,7 +669,7 @@ export class OfficeScene extends Phaser.Scene {
     const decorations = this.officeDecorator.getDecorations();
     for (const deco of decorations) {
       const gfx = this.add.graphics();
-      this.drawDecoration(gfx, deco.type, deco.config);
+      OfficeDecorator.drawDecoration(gfx, deco.type, deco.config);
       gfx.setPosition(deco.x, deco.y);
       gfx.setDepth(deco.config.zIndex);
       gfx.setAlpha(0.85);
@@ -672,79 +680,6 @@ export class OfficeScene extends Phaser.Scene {
         id: deco.id,
         estimatedSize: deco.config.width * deco.config.height * 4,
       });
-    }
-  }
-
-  private drawDecoration(gfx: Phaser.GameObjects.Graphics, type: string, config: import('../ui/OfficeDecorator').DecorationConfig): void {
-    switch (type) {
-      case 'monitor':
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
-        gfx.fillStyle(config.secondaryColor, 1);
-        gfx.fillRect(-config.width / 2 + 2, -config.height + 2, config.width - 4, config.height - 6);
-        gfx.fillStyle(config.accentColor, 0.7);
-        gfx.fillRect(-config.width / 4, -config.height / 2, config.width / 2, 2);
-        break;
-      case 'plant':
-        gfx.fillStyle(config.accentColor, 1);
-        gfx.fillRect(-3, -6, 6, 6);
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillCircle(-4, -10, 5);
-        gfx.fillStyle(config.secondaryColor, 1);
-        gfx.fillCircle(3, -12, 4);
-        gfx.fillCircle(-1, -14, 3);
-        break;
-      case 'coffee-cup':
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height - 2);
-        gfx.fillStyle(config.secondaryColor, 1);
-        gfx.fillRect(-config.width / 2 + 1, -config.height + 1, config.width - 2, 3);
-        break;
-      case 'wall-art':
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
-        gfx.fillStyle(config.secondaryColor, 0.8);
-        gfx.fillRect(-config.width / 2 + 2, -config.height + 2, config.width / 2 - 3, config.height - 4);
-        gfx.fillStyle(config.accentColor, 0.9);
-        gfx.fillRect(1, -config.height + 2, config.width / 2 - 3, config.height - 4);
-        break;
-      case 'bookshelf':
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
-        gfx.fillStyle(config.secondaryColor, 1);
-        for (let i = 0; i < 3; i++) {
-          gfx.fillRect(-config.width / 2 + 2, -config.height + 4 + i * 10, 8, 6);
-        }
-        gfx.fillStyle(config.accentColor, 1);
-        gfx.fillRect(-config.width / 2 + 12, -config.height + 4, 6, 6);
-        break;
-      case 'lamp':
-        gfx.fillStyle(config.accentColor, 1);
-        gfx.fillRect(-1, -8, 2, 8);
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-4, -4, 8, 2);
-        gfx.fillStyle(config.secondaryColor, 0.8);
-        gfx.fillTriangle(-6, -8, 6, -8, 0, -16);
-        break;
-      case 'whiteboard':
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
-        gfx.fillStyle(config.secondaryColor, 1);
-        gfx.lineStyle(1, config.accentColor, 1);
-        gfx.strokeRect(-config.width / 2, -config.height, config.width, config.height);
-        for (let i = 0; i < 3; i++) {
-          gfx.fillStyle(0x999999, 0.5);
-          gfx.fillRect(-config.width / 2 + 3, -config.height + 4 + i * 5, config.width - 6, 2);
-        }
-        break;
-      case 'poster':
-        gfx.fillStyle(config.primaryColor, 1);
-        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
-        gfx.fillStyle(config.secondaryColor, 0.8);
-        gfx.fillCircle(0, -config.height / 2, 6);
-        gfx.fillStyle(config.accentColor, 0.9);
-        gfx.fillRect(-config.width / 2 + 3, -config.height + 3, config.width - 6, 3);
-        break;
     }
   }
 
@@ -759,7 +694,7 @@ export class OfficeScene extends Phaser.Scene {
     agent.moveTo(targetX, targetY);
   }
 
-  moveAgentToRoom(agentId: string, room: 'pm-office' | 'dev-studio' | 'test-lab' | 'review-center'): void {
+  moveAgentToRoom(agentId: string, room: RoomName): void {
     const agent = this.agentMap.get(agentId);
     if (!agent) return;
 
@@ -849,6 +784,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    if (this.taskTimer) {
+      this.taskTimer.remove(false);
+      this.taskTimer = null;
+    }
+    if (this.workstationTimer) {
+      this.workstationTimer.remove(false);
+      this.workstationTimer = null;
+    }
     this.soundSystem.stopAll();
     this.soundSystem.destroy();
     this.officeDecorator.destroy();

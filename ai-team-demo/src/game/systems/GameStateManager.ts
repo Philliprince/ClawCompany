@@ -85,13 +85,14 @@ export class GameStateManager {
     }
   }
 
-  private isValidState(obj: any): obj is GameState {
+  private isValidState(obj: unknown): obj is GameState {
+    if (!obj || typeof obj !== 'object') return false;
+    const record = obj as Record<string, unknown>;
     return (
-      obj &&
-      typeof obj.version === 'string' &&
-      typeof obj.timestamp === 'number' &&
-      Array.isArray(obj.agents) &&
-      obj.metadata !== undefined
+      typeof record.version === 'string' &&
+      typeof record.timestamp === 'number' &&
+      Array.isArray(record.agents) &&
+      record.metadata !== undefined
     );
   }
 

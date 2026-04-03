@@ -30,7 +30,7 @@ export interface SDKStats {
 }
 
 type SDKEventType = string;
-type SDKEventHandler = (data: any) => void;
+type SDKEventHandler = (data: unknown) => void;
 
 export class GameSDK {
   private state: GameSDKState = 'idle';
@@ -89,7 +89,10 @@ export class GameSDK {
   }
 
   getConfig(): GameSDKConfig {
-    return this.config!;
+    if (!this.config) {
+      throw new Error('GameSDK not configured. Call configure() first.');
+    }
+    return this.config;
   }
 
   getWarnings(): ValidationResult['warnings'] {
@@ -105,7 +108,10 @@ export class GameSDK {
   }
 
   getAgents(): SDKAgent[] {
-    return this.agentOrder.map(id => ({ ...this.agents.get(id)! }));
+    return this.agentOrder
+      .map(id => this.agents.get(id))
+      .filter((a): a is SDKAgent => a != null)
+      .map(a => ({ ...a }));
   }
 
   getAgent(id: string): SDKAgent | null {
@@ -165,7 +171,7 @@ export class GameSDK {
     if (!this.handlers.has(event)) {
       this.handlers.set(event, new Set());
     }
-    this.handlers.get(event)!.add(handler);
+    this.handlers.get(event)?.add(handler);
   }
 
   off(event: SDKEventType, handler: SDKEventHandler): void {
@@ -180,25 +186,41 @@ export class GameSDK {
     this.on(event, wrapper);
   }
 
-  emit(event: SDKEventType, data: any): void {
+  emit(event: SDKEventType, data: unknown): void {
     const specificHandlers = this.handlers.get(event);
     if (specificHandlers) {
       for (const h of specificHandlers) {
-        h(data);
+        try {
+          h(data);
+        } catch {
+          // continue to next handler
+        }
       }
     }
 
     const wildcardHandlers = this.handlers.get('*');
     if (wildcardHandlers && event !== '*') {
       for (const h of wildcardHandlers) {
-        h({ event, data });
+        try {
+          h({ event, data });
+        } catch {
+          // continue to next handler
+        }
       }
     }
   }
 
+  private getAgentOrFail(id: string): SDKAgent {
+    const agent = this.agents.get(id);
+    if (!agent) {
+      throw new Error(`Agent not found: ${id}`);
+    }
+    return agent;
+  }
+
   saveState(extraMeta?: Record<string, unknown>): GameState {
     const agentStates: AgentState[] = this.agentOrder.map(id => {
-      const a = this.agents.get(id)!;
+      const a = this.getAgentOrFail(id);
       return {
         id: a.id,
         name: a.name,
@@ -278,13 +300,17 @@ export class GameSDK {
     };
   }
 
-  reset(): void {
+  private clearInternalState(): void {
     this.handlers.clear();
     this.agents.clear();
     this.agentOrder = [];
     this.config = null;
     this.startTime = null;
     this.connected = false;
+  }
+
+  reset(): void {
+    this.clearInternalState();
     this.warnings = [];
     this.state = 'idle';
     this.stateManager = new GameStateManager();
@@ -292,12 +318,7 @@ export class GameSDK {
 
   destroy(): void {
     if (this.state === 'destroyed') return;
-    this.handlers.clear();
-    this.agents.clear();
-    this.agentOrder = [];
-    this.config = null;
-    this.startTime = null;
-    this.connected = false;
+    this.clearInternalState();
     this.state = 'destroyed';
   }
 }
