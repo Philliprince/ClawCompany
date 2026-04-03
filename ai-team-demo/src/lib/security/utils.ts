@@ -197,26 +197,40 @@ export class RateLimiter {
   private static requests: Map<string, number[]> = new Map()
   private static readonly WINDOW_MS = 60000 // 1 分钟
   private static readonly MAX_REQUESTS = 60 // 每分钟最多 60 次
+  private static readonly CLEANUP_INTERVAL_MS = 30000 // 30 秒清理一次
+  private static cleanupTimer: ReturnType<typeof setInterval> | null = null
+
+  private static ensureCleanupStarted(): void {
+    if (this.cleanupTimer !== null) return
+    this.cleanupTimer = setInterval(() => this.cleanup(), this.CLEANUP_INTERVAL_MS)
+    if (this.cleanupTimer.unref) {
+      this.cleanupTimer.unref()
+    }
+  }
+
+  static stopCleanup(): void {
+    if (this.cleanupTimer !== null) {
+      clearInterval(this.cleanupTimer)
+      this.cleanupTimer = null
+    }
+  }
 
   /**
    * 检查是否超过速率限制
    */
   static isAllowed(identifier: string): boolean {
+    this.ensureCleanupStarted()
+
     const now = Date.now()
     const windowStart = now - this.WINDOW_MS
 
-    // 获取该标识符的请求记录
     let requests = this.requests.get(identifier) || []
-
-    // 过滤掉过期的请求
     requests = requests.filter(time => time > windowStart)
 
-    // 检查是否超过限制
     if (requests.length >= this.MAX_REQUESTS) {
       return false
     }
 
-    // 记录本次请求
     requests.push(now)
     this.requests.set(identifier, requests)
 
@@ -246,7 +260,7 @@ export class RateLimiter {
   /**
    * 清理所有过期记录
    */
-  static cleanup(): void {
+  static cleanup(): number {
     const now = Date.now()
     const windowStart = now - this.WINDOW_MS
 
@@ -259,8 +273,14 @@ export class RateLimiter {
         this.requests.set(identifier, filtered)
       }
     })
-    
+
     toDelete.forEach(id => this.requests.delete(id))
+
+    return toDelete.length
+  }
+
+  static get activeIdentifiers(): number {
+    return this.requests.size
   }
 }
 
