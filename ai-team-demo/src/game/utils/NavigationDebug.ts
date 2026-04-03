@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+
 import { AgentCharacter } from '../characters/AgentCharacter';
 
 export interface NavigationDebugConfig {

@@ -78,7 +78,7 @@ describe('LiveSessionManager', () => {
 
   beforeEach(() => {
     MockEventSource.reset();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     globalThis.EventSource = MockEventSource as any;
     eventBus = new EventBus();
     manager = new LiveSessionManager(eventBus);

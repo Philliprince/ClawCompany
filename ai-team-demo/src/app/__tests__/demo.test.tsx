@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+
 import DemoPage from '../demo/page'
 
 // Mock framer-motion

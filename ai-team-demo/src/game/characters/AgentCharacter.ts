@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
+
 import { PHYSICS_CONFIG } from '../config/gameConfig';
 import { AnimationController, AnimationState } from '../systems/AnimationController';
 import { PathfindingSystem, PathPoint } from '../systems/PathfindingSystem';
 import { EmotionSystem, EmotionType } from '../systems/EmotionSystem';
+
 import type { AgentConfig } from '@/types/agent-config';
 
 type NavigationState = 'idle' | 'moving' | 'jumping' | 'arrived';

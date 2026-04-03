@@ -5,7 +5,7 @@ import { getLLMProvider } from '../llm/factory'
 import { ChatMessage } from '../llm/types'
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var sessions_spawn: ((opts: {
     runtime?: string;
     agentId?: string;
@@ -15,7 +15,7 @@ declare global {
     model?: string;
     cwd?: string;
   }) => Promise<unknown>) | undefined;
-  // eslint-disable-next-line no-var
+   
   var sessions_history: ((opts: {
     sessionKey: string;
   }) => Promise<{ messages?: Array<{ content?: string }> }>) | undefined;

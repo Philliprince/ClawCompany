@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore, useRef } from 'react';
+
 import { DashboardStore, AgentInfo, DashboardStats } from '@/game/data/DashboardStore';
 import { GameEvent } from '@/game/types/GameEvents';
 

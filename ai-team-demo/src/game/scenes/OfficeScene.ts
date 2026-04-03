@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
+
 import { AgentCharacter, createAgent } from '../characters/AgentCharacter';
-import type { AgentConfig } from '@/types/agent-config';
 import { TILE_SIZE } from '../config/gameConfig';
 import { DebugOverlay } from '../utils/DebugOverlay';
 import { MovementSystem } from '../systems/MovementSystem';
@@ -22,6 +22,8 @@ import { OfficeDecorator } from '../ui/OfficeDecorator';
 import { ShadowRenderer } from '../sprites/ShadowRenderer';
 import { RoleVisuals } from '../sprites/RoleVisuals';
 import type { RoomName, TaskType, Workstation, TilemapData, ActiveTask } from '../types/OfficeTypes';
+
+import type { AgentConfig } from '@/types/agent-config';
 export type { RoomName, TaskType, Workstation, TilemapData, ActiveTask } from '../types/OfficeTypes';
 
 const AGENT_CONFIGS: AgentConfig[] = [

@@ -111,6 +111,7 @@ export abstract class BaseLLMProvider implements LLMProvider {
               yield content
             }
           } catch {
+            // Ignore parse errors for malformed SSE data
           }
         }
       }

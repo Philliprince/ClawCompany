@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+
 import ChatPage from '../page'
 
 // Mock dependencies

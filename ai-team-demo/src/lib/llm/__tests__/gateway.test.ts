@@ -1,5 +1,6 @@
 import { GatewayProvider } from '../gateway'
 import { ChatMessage } from '../types'
+
 import * as gatewayClient from '@/lib/gateway/client'
 
 jest.mock('@/lib/gateway/client', () => ({

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+
 import { NavigationMesh, PlatformNode } from '../data/NavigationMesh';
 import { TILE_SIZE } from '../config/gameConfig';
 import { MinHeap } from './MinHeap';

@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
+
 import { AgentStatusPanel } from '../AgentStatusPanel';
+
 import { AgentInfo } from '@/game/data/DashboardStore';
 
 const mockAgents: AgentInfo[] = [

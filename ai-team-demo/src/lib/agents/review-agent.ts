@@ -152,7 +152,7 @@ export class ReviewAgent extends BaseAgent {
   private checkCodeStyle(code: string): {
     name: string; passed: boolean; warning?: boolean; message?: string
   } {
-    const hasConsistentIndentation = !code || /^(  |\t|    )/m.test(code) || code.split('\n').length <= 3
+    const hasConsistentIndentation = !code || /^( {2}|\t| {4})/m.test(code) || code.split('\n').length <= 3
     return {
       name: '代码风格',
       passed: hasConsistentIndentation,
