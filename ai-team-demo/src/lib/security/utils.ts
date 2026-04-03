@@ -28,7 +28,13 @@ export class APIKeyManager {
       )
     }
 
-    const salt = process.env.ENCRYPTION_SALT || 'ai-team-demo-salt'
+    const salt = process.env.ENCRYPTION_SALT
+    if (!salt) {
+      throw new Error(
+        'ENCRYPTION_SALT environment variable is required. ' +
+        'Set a unique, random salt before starting the application.'
+      )
+    }
     this._cachedKey = crypto.scryptSync(encryptionKey, salt, 32)
     return this._cachedKey
   }
