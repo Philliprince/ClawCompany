@@ -247,8 +247,8 @@ describe('Orchestrator - 错误处理和重试机制', () => {
       expect(executedTasks).toContain('dev-2')
       // Review for Task 2 should execute
       expect(executedTasks).toContain('review-2')
-      // Result should indicate partial success (some tasks completed)
-      expect(result.success).toBe(true)
+      // Result should indicate failure when not all tasks completed
+      expect(result.success).toBe(false)
       // Check stats instead of failedTasks
       expect(result.stats?.failedTasks).toBeGreaterThan(0)
     }, 15000)
@@ -710,7 +710,7 @@ describe('Orchestrator - 错误处理和重试机制', () => {
       expect(taskManager.updateTaskStatus).toHaveBeenCalledWith('dev-1', 'review')
       expect(taskManager.updateTaskStatus).toHaveBeenCalledWith('dev-1', 'pending')
       expect(taskManager.updateTaskStatus).not.toHaveBeenCalledWith('dev-1', 'done')
-      expect(result.success).toBe(true)
+      expect(result.success).toBe(false)
     })
   })
 
@@ -992,7 +992,7 @@ describe('Orchestrator - 错误处理和重试机制', () => {
 
       const result = await orchestrator.executeUserRequest('build feature')
 
-      expect(result.success).toBe(true)
+      expect(result.success).toBe(false)
       expect(result.stats?.failedTasks).toBeGreaterThanOrEqual(1)
 
       consoleSpy.mockRestore()

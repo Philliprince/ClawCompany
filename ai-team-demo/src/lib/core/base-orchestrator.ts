@@ -208,10 +208,10 @@ export abstract class BaseOrchestrator {
     }
   }
 
-  protected buildWorkflowStats(totalTasks: number, callbacks: OrchestratorCallbacks): WorkflowStats {
+  protected buildWorkflowStats(totalTasks: number, callbacks: OrchestratorCallbacks, completedCount?: number): WorkflowStats {
     return {
       totalTasks,
-      successfulTasks: totalTasks - this.failedTasks.length,
+      successfulTasks: completedCount ?? totalTasks - this.failedTasks.length,
       failedTasks: this.failedTasks.length,
       totalRetries: this.totalRetries,
       executionTime: Date.now() - this.startTime,

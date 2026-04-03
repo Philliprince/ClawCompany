@@ -111,7 +111,7 @@ export class Orchestrator extends BaseOrchestrator {
               message: depError.message,
               timestamp: new Date(),
             },
-            stats: this.buildWorkflowStats(subTaskIds.length, cb),
+        stats: this.buildWorkflowStats(subTaskIds.length, cb, completedTaskIds.size),
           }
         }
         throw depError
@@ -201,8 +201,8 @@ export class Orchestrator extends BaseOrchestrator {
       this.obs.perf.recordValue('orchestrator.workflow.duration', Date.now() - this.startTime)
       this.obs.perf.setGauge('orchestrator.tasks.active', 0)
 
-      const hasSuccess = subTaskIds.length === 0 || this.failedTasks.length < subTaskIds.length
-      this.logInfo('Workflow completed', { success: hasSuccess })
+      const hasSuccess = subTaskIds.length === 0 || completedTaskIds.size === subTaskIds.length
+      this.logInfo('Workflow completed', { success: hasSuccess, completed: completedTaskIds.size, total: subTaskIds.length, failed: this.failedTasks.length })
       return {
         success: hasSuccess,
         messages: cb.getChatHistory().map(m => ({
@@ -213,7 +213,7 @@ export class Orchestrator extends BaseOrchestrator {
         tasks: cb.getAllTasks(),
         files: allFiles,
         failedTasks: this.failedTasks.length > 0 ? this.failedTasks : undefined,
-        stats: this.buildWorkflowStats(subTaskIds.length, cb),
+        stats: this.buildWorkflowStats(subTaskIds.length, cb, completedTaskIds.size),
       }
     } catch (error) {
       this.log.error('Fatal error in executeUserRequest', { error: error instanceof Error ? error.message : 'Unknown error' })
