@@ -1,4 +1,4 @@
-import { BaseOrchestrator, OrchestratorCallbacks } from '../core/base-orchestrator'
+import { BaseOrchestrator, OrchestratorCallbacks, ObservabilityConfig } from '../core/base-orchestrator'
 import { WorkflowResult, AgentRole, Task, AgentContext, RetryConfig } from '../core/types'
 import { agentManager } from '../agents/manager'
 import { taskManager } from '../tasks/manager'
@@ -6,15 +6,25 @@ import { chatManager } from '../chat/manager'
 import { fileSystemManager } from '../filesystem/manager'
 import { resolveTaskOrder, DependencyError } from '../utils/task-resolver'
 import { resolveTitleDependencies } from '../utils/resolve-title-deps'
+import { toAppError, ErrorCategory, ErrorSeverity, AppError } from '../core/errors'
+import { ErrorCategory as EC, ErrorSeverity as ES } from '../core/errors'
 
 export type { WorkflowError, FailedTask, WorkflowStats, WorkflowResult } from '../core/types'
 
 export class Orchestrator extends BaseOrchestrator {
   private projectId: string
 
-  constructor(projectId: string = 'default', retryConfig?: Partial<RetryConfig>) {
-    super(retryConfig)
+  constructor(projectId: string = 'default', retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig) {
+    super(retryConfig, observability)
     this.projectId = projectId
+  }
+
+  getObservability() {
+    return super.getObservability()
+  }
+
+  resetObservability() {
+    super.resetObservability()
   }
 
   protected getCallbacks(): OrchestratorCallbacks {
