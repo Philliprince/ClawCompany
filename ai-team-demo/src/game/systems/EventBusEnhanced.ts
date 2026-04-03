@@ -1,6 +1,7 @@
 import { GameEvent, GameEventType, GameEventHandler } from '../types/GameEvents';
+import { EventBus } from './EventBus';
 
-export interface EventBusConfig {
+export interface EventBusEnhancedConfig {
   maxHistorySize?: number;
   enableErrorLogging?: boolean;
   enableEventValidation?: boolean;
@@ -26,99 +27,49 @@ export interface ErrorStats {
   recentErrors: ErrorEvent[];
 }
 
-interface ValidatedEvent extends GameEvent {
-  _validated: boolean;
-}
-
-export class EventBusEnhanced {
-  private handlers = new Map<string, Set<GameEventHandler<GameEvent>>>();
-  private wildcardHandlers = new Set<GameEventHandler<GameEvent>>();
-  private history: GameEvent[] = [];
+export class EventBusEnhanced extends EventBus {
   private errorStats: ErrorStats = {
     totalErrors: 0,
     errorsByType: new Map(),
     lastError: null,
     recentErrors: []
   };
-  private readonly maxHistorySize: number;
   private readonly enableErrorLogging: boolean;
   private readonly enableEventValidation: boolean;
   private readonly maxErrorHandlerRetries: number;
   private readonly maxErrorHistory = 100;
 
-  constructor(config: EventBusConfig = {}) {
-    this.maxHistorySize = config.maxHistorySize ?? 100;
+  constructor(config: EventBusEnhancedConfig = {}) {
+    super({ maxHistorySize: config.maxHistorySize });
     this.enableErrorLogging = config.enableErrorLogging ?? true;
     this.enableEventValidation = config.enableEventValidation ?? true;
     this.maxErrorHandlerRetries = config.maxErrorHandlerRetries ?? 3;
   }
 
-  on(eventType: GameEventType | '*', handler: GameEventHandler<GameEvent>): void {
-    if (eventType === '*') {
-      this.wildcardHandlers.add(handler);
-      return;
-    }
-
-    if (!this.handlers.has(eventType)) {
-      this.handlers.set(eventType, new Set());
-    }
-    this.handlers.get(eventType)!.add(handler);
-  }
-
-  off(eventType: GameEventType | '*', handler: GameEventHandler<GameEvent>): void {
-    if (eventType === '*') {
-      this.wildcardHandlers.delete(handler);
-      return;
-    }
-
-    const handlers = this.handlers.get(eventType);
-    if (handlers) {
-      handlers.delete(handler);
-    }
-  }
-
-  once(eventType: GameEventType, handler: GameEventHandler<GameEvent>): void {
-    const wrapper: GameEventHandler<GameEvent> = (event) => {
-      this.off(eventType, wrapper);
-      handler(event);
-    };
-    this.on(eventType, wrapper);
-  }
-
   emit(event: GameEvent): void {
-    const startTime = performance.now();
-    
-    // Validate event if enabled
-    if (this.enableEventValidation && !this.validateEvent(event)) {
-      const validationError = new Error(`Event validation failed for type: ${event.type}`);
-      this.handleError(validationError, event, false, 0);
-      return;
+    let processedEvent = event;
+    if (this.enableEventValidation) {
+      const result = this.validateEvent(event);
+      if (!result.valid) {
+        const validationError = new Error(`Event validation failed for type: ${event.type}`);
+        this.handleError(validationError, event, false, 0);
+        return;
+      }
+      processedEvent = result.event;
     }
 
-    this.addToHistory(event);
+    this.addToHistory(processedEvent);
 
-    // Execute specific handlers
-    this.executeHandlersWithRetry(
-      this.handlers.get(event.type),
-      event,
-      false,
-      startTime
-    );
+    const specificHandlers = this.handlers.get(processedEvent.type);
+    this.executeHandlersWithRetry(specificHandlers, processedEvent, false);
 
-    // Execute wildcard handlers
-    this.executeHandlersWithRetry(
-      this.wildcardHandlers,
-      event,
-      true,
-      startTime
-    );
+    this.executeHandlersWithRetry(this.wildcardHandlers, processedEvent, true);
   }
 
   private executeHandlersWithRetry(
     handlers: Set<GameEventHandler<GameEvent>> | undefined,
     event: GameEvent,
-    isWildcard: boolean,
-    startTime: number
+    isWildcard: boolean
   ): void {
     if (!handlers || handlers.size === 0) return;
 
@@ -128,72 +79,62 @@ export class EventBusEnhanced {
 
       while (retryCount <= this.maxErrorHandlerRetries) {
         try {
-          const handlerStartTime = performance.now();
           handler(event);
-          const handlerDuration = performance.now() - handlerStartTime;
-          
           if (this.enableErrorLogging && retryCount > 0) {
-            console.log(`[EventBus] Handler succeeded after ${retryCount} retries for ${event.type} (${handlerDuration.toFixed(2)}ms)`);
+            console.log(`[EventBus] Handler succeeded after ${retryCount} retries for ${event.type}`);
           }
-          
-          break; // Success, exit retry loop
-        } catch (error) {
-          lastError = error as Error;
+          break;
+        } catch (error: unknown) {
+          lastError = error instanceof Error ? error : new Error(String(error));
           retryCount++;
-          
+
           if (retryCount <= this.maxErrorHandlerRetries) {
             console.warn(`[EventBus] Handler failed ${retryCount}/${this.maxErrorHandlerRetries} for ${event.type}:`, error);
-            // Small delay before retry
-            if (retryCount < this.maxErrorHandlerRetries) {
-              setTimeout(() => {}, Math.min(100 * retryCount, 1000));
-            }
           }
         }
       }
 
-      // If all retries failed, record the error
       if (retryCount > this.maxErrorHandlerRetries && lastError) {
         this.handleError(lastError, event, isWildcard, retryCount);
       }
     });
   }
 
-  private validateEvent(event: GameEvent): boolean {
+  private validateEvent(event: GameEvent): { valid: boolean; event: GameEvent } {
     if (!event || typeof event !== 'object') {
-      return false;
+      return { valid: false, event };
     }
 
     if (!event.type || typeof event.type !== 'string') {
-      return false;
+      return { valid: false, event };
     }
 
+    let correctedEvent = event;
     if (typeof event.timestamp !== 'number' || event.timestamp <= 0) {
-      event.timestamp = Date.now();
+      correctedEvent = { ...event, timestamp: Date.now() };
     }
 
-    // Type-specific validation
-    switch (event.type) {
+    switch (correctedEvent.type) {
       case 'agent:status-change':
-        if (!event.agentId || typeof event.agentId !== 'string') {
-          return false;
+        if (!correctedEvent.agentId || typeof correctedEvent.agentId !== 'string') {
+          return { valid: false, event };
         }
         break;
-        
+
       case 'agent:task-assigned':
       case 'agent:task-completed':
-        if (!event.agentId || !event.taskId) {
-          return false;
+        if (!correctedEvent.agentId || !(correctedEvent as Record<string, unknown>).taskId) {
+          return { valid: false, event };
         }
         break;
-        
+
       case 'connection:open':
       case 'connection:close':
       case 'connection:error':
-        // These events don't require agentId
         break;
     }
 
-    return true;
+    return { valid: true, event: correctedEvent };
   }
 
   private handleError(error: Error, event: GameEvent, isWildcard: boolean, retryCount: number): void {
@@ -203,27 +144,24 @@ export class EventBusEnhanced {
       error,
       context: {
         eventType: event.type,
-        handlerCount: this.getHandlerCount(event.type),
+        handlerCount: this.listenerCount(event.type),
         isWildcard,
         retryCount
       }
     };
 
-    // Update error statistics
     this.errorStats.totalErrors++;
     this.errorStats.lastError = errorEvent;
-    
+
     const errorTypeKey = `${event.type}:${error.name}`;
     const currentCount = this.errorStats.errorsByType.get(errorTypeKey) || 0;
     this.errorStats.errorsByType.set(errorTypeKey, currentCount + 1);
 
-    // Keep recent errors for debugging
     this.errorStats.recentErrors.push(errorEvent);
     if (this.errorStats.recentErrors.length > this.maxErrorHistory) {
       this.errorStats.recentErrors.shift();
     }
 
-    // Log the error if enabled
     if (this.enableErrorLogging) {
       console.error(`[EventBus] Error processing event ${event.type}:`, {
         error: error.message,
@@ -235,51 +173,12 @@ export class EventBusEnhanced {
   }
 
   private sanitizeEventForLogging(event: GameEvent): Partial<GameEvent> {
-    // Create a copy without sensitive data if needed
     const { agentId, taskId, ...safeEvent } = event;
     return {
       ...safeEvent,
       agentId: agentId ? '[REDACTED]' : undefined,
       taskId: taskId ? '[REDACTED]' : undefined
     };
-  }
-
-  private addToHistory(event: GameEvent): void {
-    this.history.push(event);
-    while (this.history.length > this.maxHistorySize) {
-      this.history.shift();
-    }
-  }
-
-  private getHandlerCount(eventType: GameEventType): number {
-    const specific = this.handlers.get(eventType)?.size || 0;
-    const wildcard = this.wildcardHandlers.size;
-    return specific + wildcard;
-  }
-
-  clear(): void {
-    this.handlers.clear();
-    this.wildcardHandlers.clear();
-    this.history = [];
-  }
-
-  listenerCount(eventType: GameEventType): number {
-    if (eventType === '*') {
-      return this.handlers.size + this.wildcardHandlers.size;
-    }
-    return this.handlers.get(eventType)?.size || 0;
-  }
-
-  getEventTypes(): GameEventType[] {
-    return Array.from(this.handlers.keys()) as GameEventType[];
-  }
-
-  getHistory(): GameEvent[] {
-    return [...this.history];
-  }
-
-  clearHistory(): void {
-    this.history = [];
   }
 
   getErrorStats(): ErrorStats {
@@ -298,20 +197,18 @@ export class EventBusEnhanced {
     };
   }
 
-  // Performance monitoring
   getPerformanceMetrics() {
     return {
-      historySize: this.history.length,
-      maxHistorySize: this.maxHistorySize,
+      historySize: this.getHistory().length,
       handlerCounts: Object.fromEntries(
-        Array.from(this.handlers.entries()).map(([type, handlers]) => [
+        this.getEventTypes().map(type => [
           type,
-          handlers.size
+          this.handlers.get(type)?.size ?? 0
         ])
       ),
       wildcardHandlerCount: this.wildcardHandlers.size,
-      errorRate: this.errorStats.totalErrors > 0 
-        ? (this.errorStats.totalErrors / (this.history.length + this.errorStats.totalErrors)) * 100 
+      errorRate: this.errorStats.totalErrors > 0
+        ? (this.errorStats.totalErrors / (this.getHistory().length + this.errorStats.totalErrors)) * 100
         : 0
     };
   }

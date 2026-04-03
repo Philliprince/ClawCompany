@@ -50,6 +50,8 @@ export interface ChatMessage {
   }
 }
 
+export type Message = ChatMessage
+
 export interface PMResult {
   analysis: string
   tasks: Task[]

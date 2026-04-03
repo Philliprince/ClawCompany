@@ -7,10 +7,10 @@ export interface EventBusConfig {
 type TypedHandler = GameEventHandler<GameEvent>;
 
 export class EventBus {
-  private handlers = new Map<string, Set<TypedHandler>>();
-  private wildcardHandlers = new Set<TypedHandler>();
-  private history: GameEvent[] = [];
-  private readonly maxHistorySize: number;
+  protected handlers = new Map<string, Set<TypedHandler>>();
+  protected wildcardHandlers = new Set<TypedHandler>();
+  protected history: GameEvent[] = [];
+  protected readonly maxHistorySize: number;
 
   constructor(config?: EventBusConfig) {
     this.maxHistorySize = config?.maxHistorySize ?? 100;
@@ -93,7 +93,7 @@ export class EventBus {
     this.history = [];
   }
 
-  private addToHistory(event: GameEvent): void {
+  protected addToHistory(event: GameEvent): void {
     this.history.push(event);
     while (this.history.length > this.maxHistorySize) {
       this.history.shift();

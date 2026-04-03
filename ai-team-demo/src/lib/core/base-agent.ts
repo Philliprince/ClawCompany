@@ -4,6 +4,23 @@ import { extractJSONObject } from '../utils/json-parser'
 import { getLLMProvider } from '../llm/factory'
 import { ChatMessage } from '../llm/types'
 
+declare global {
+  // eslint-disable-next-line no-var
+  var sessions_spawn: ((opts: {
+    runtime?: string;
+    agentId?: string;
+    task: string;
+    thinking?: string;
+    mode?: string;
+    model?: string;
+    cwd?: string;
+  }) => Promise<unknown>) | undefined;
+  // eslint-disable-next-line no-var
+  var sessions_history: ((opts: {
+    sessionKey: string;
+  }) => Promise<{ messages?: Array<{ content?: string }> }>) | undefined;
+}
+
 export abstract class BaseAgent {
   readonly id: string
   readonly name: string
@@ -108,13 +125,12 @@ export abstract class BaseOpenClawAgent<TConfig extends AgentConfig = AgentConfi
     runtime?: 'subagent' | 'acp'
     agentId?: string
     cwd?: string
-  }): Promise<any> {
-    const sessions_spawn = (global as any).sessions_spawn
-    if (typeof sessions_spawn !== 'function') {
+  }): Promise<unknown> {
+    if (typeof globalThis.sessions_spawn !== 'function') {
       throw new Error('OpenClaw sessions_spawn not available')
     }
 
-    return await sessions_spawn({
+    return await globalThis.sessions_spawn({
       runtime: options?.runtime || 'subagent',
       agentId: options?.agentId,
       task,
@@ -125,9 +141,11 @@ export abstract class BaseOpenClawAgent<TConfig extends AgentConfig = AgentConfi
     })
   }
 
-  protected async parseJSONFromSession<T>(session: any, defaultValue: T): Promise<T> {
-    const sessions_history = (global as any).sessions_history
-    if (typeof sessions_history !== 'function') {
+  protected async parseJSONFromSession<T>(
+    session: { sessionKey?: string } | null | undefined,
+    defaultValue: T,
+  ): Promise<T> {
+    if (typeof globalThis.sessions_history !== 'function') {
       this.log('sessions_history not available, returning default')
       return defaultValue
     }
@@ -137,14 +155,14 @@ export abstract class BaseOpenClawAgent<TConfig extends AgentConfig = AgentConfi
         return defaultValue
       }
 
-      const history = await sessions_history({ sessionKey: session.sessionKey })
+      const history = await globalThis.sessions_history!({ sessionKey: session.sessionKey })
       const lastMessage = history.messages?.[history.messages.length - 1]
 
       if (lastMessage?.content) {
         const content = lastMessage.content
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0])
+        const parsed = extractJSONObject(content)
+        if (parsed) {
+          return parsed as T
         }
       }
     } catch (error) {

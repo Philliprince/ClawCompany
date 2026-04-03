@@ -84,7 +84,7 @@ export class ChatManager {
     const manager = new ChatManager(result.data.sessionId)
     manager.messages = result.data.messages.map((m: Message) => ({
       ...m,
-      timestamp: new Date(m.timestamp)
+      timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp ?? Date.now())
     }))
     return manager
   }

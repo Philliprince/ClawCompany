@@ -41,16 +41,22 @@ export class PerformanceMonitor {
   private alerts: PerformanceAlert[] = [];
   private lastFrameDelta = 0;
 
+  private writeIndex: number = 0;
+  private isBufferFull: boolean = false;
+
   constructor(config?: PerformanceMonitorConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
   recordFrame(deltaMs: number): void {
     this.lastFrameDelta = deltaMs;
-    this.frameTimes.push(deltaMs);
 
-    if (this.frameTimes.length > this.config.sampleSize) {
-      this.frameTimes.shift();
+    if (this.frameTimes.length < this.config.sampleSize) {
+      this.frameTimes.push(deltaMs);
+    } else {
+      this.frameTimes[this.writeIndex] = deltaMs;
+      this.writeIndex = (this.writeIndex + 1) % this.config.sampleSize;
+      this.isBufferFull = true;
     }
 
     this.checkAlerts();
@@ -130,6 +136,8 @@ export class PerformanceMonitor {
     this.frameTimes = [];
     this.alerts = [];
     this.lastFrameDelta = 0;
+    this.writeIndex = 0;
+    this.isBufferFull = false;
   }
 
   private checkAlerts(): void {

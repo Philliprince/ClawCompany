@@ -1,3 +1,5 @@
+import Phaser from 'phaser';
+
 export type DecorationType =
   | 'plant'
   | 'monitor'
@@ -127,5 +129,78 @@ export class OfficeDecorator {
 
   destroy(): void {
     this.removeAllDecorations();
+  }
+
+  static drawDecoration(gfx: Phaser.GameObjects.Graphics, type: DecorationType, config: DecorationConfig): void {
+    switch (type) {
+      case 'monitor':
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
+        gfx.fillStyle(config.secondaryColor, 1);
+        gfx.fillRect(-config.width / 2 + 2, -config.height + 2, config.width - 4, config.height - 6);
+        gfx.fillStyle(config.accentColor, 0.7);
+        gfx.fillRect(-config.width / 4, -config.height / 2, config.width / 2, 2);
+        break;
+      case 'plant':
+        gfx.fillStyle(config.accentColor, 1);
+        gfx.fillRect(-3, -6, 6, 6);
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillCircle(-4, -10, 5);
+        gfx.fillStyle(config.secondaryColor, 1);
+        gfx.fillCircle(3, -12, 4);
+        gfx.fillCircle(-1, -14, 3);
+        break;
+      case 'coffee-cup':
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height - 2);
+        gfx.fillStyle(config.secondaryColor, 1);
+        gfx.fillRect(-config.width / 2 + 1, -config.height + 1, config.width - 2, 3);
+        break;
+      case 'wall-art':
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
+        gfx.fillStyle(config.secondaryColor, 0.8);
+        gfx.fillRect(-config.width / 2 + 2, -config.height + 2, config.width / 2 - 3, config.height - 4);
+        gfx.fillStyle(config.accentColor, 0.9);
+        gfx.fillRect(1, -config.height + 2, config.width / 2 - 3, config.height - 4);
+        break;
+      case 'bookshelf':
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
+        gfx.fillStyle(config.secondaryColor, 1);
+        for (let i = 0; i < 3; i++) {
+          gfx.fillRect(-config.width / 2 + 2, -config.height + 4 + i * 10, 8, 6);
+        }
+        gfx.fillStyle(config.accentColor, 1);
+        gfx.fillRect(-config.width / 2 + 12, -config.height + 4, 6, 6);
+        break;
+      case 'lamp':
+        gfx.fillStyle(config.accentColor, 1);
+        gfx.fillRect(-1, -8, 2, 8);
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-4, -4, 8, 2);
+        gfx.fillStyle(config.secondaryColor, 0.8);
+        gfx.fillTriangle(-6, -8, 6, -8, 0, -16);
+        break;
+      case 'whiteboard':
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
+        gfx.fillStyle(config.secondaryColor, 1);
+        gfx.lineStyle(1, config.accentColor, 1);
+        gfx.strokeRect(-config.width / 2, -config.height, config.width, config.height);
+        for (let i = 0; i < 3; i++) {
+          gfx.fillStyle(0x999999, 0.5);
+          gfx.fillRect(-config.width / 2 + 3, -config.height + 4 + i * 5, config.width - 6, 2);
+        }
+        break;
+      case 'poster':
+        gfx.fillStyle(config.primaryColor, 1);
+        gfx.fillRect(-config.width / 2, -config.height, config.width, config.height);
+        gfx.fillStyle(config.secondaryColor, 0.8);
+        gfx.fillCircle(0, -config.height / 2, 6);
+        gfx.fillStyle(config.accentColor, 0.9);
+        gfx.fillRect(-config.width / 2 + 3, -config.height + 3, config.width - 6, 3);
+        break;
+    }
   }
 }
