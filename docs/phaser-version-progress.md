@@ -144,20 +144,21 @@
   - Bug 修复：物理 debug 默认关闭、场景生命周期清理（shutdown 方法）、NavigationDebug 中文→英文、Agent ID 统一为 alice/bob/charlie/diana
   - 83 个新测试（SoundSystem: 40, OfficeDecorator: 18, RoleVisuals: 13, ShadowRenderer: 12）
 
-### ⏳ Version 12: 发布准备（待开始）
-- **时间:** 待定
+### ✅ Version 12: 发布准备（完成）
+- **时间:** ~25 分钟
 - **内容:**
-  - 文档完善
-  - 示例代码
-  - 发布准备
+  - ConfigValidator 游戏配置验证器（容器/尺寸/角色/物理/SSE 全面验证，自定义规则扩展，Schema 查询）
+  - GameStateManager 游戏状态管理器（快照捕获/序列化/反序列化，状态 Diff 对比，LocalStorage 导入导出，标签查找）
+  - GameSDK 统一公共 API 门面（配置→验证→启动→控制全生命周期，事件总线 on/off/once/wildcard，Agent 管理 status/emotion/task，状态保存/恢复，统计信息）
+  - 109 个新测试（ConfigValidator: 28, GameStateManager: 29, GameSDK: 52）
 
 ---
 
 ## 完成统计
 
-- **已完成**: 11/12 (92%)
-- **总用时**: ~7.1 小时
-- **测试覆盖**: 963/963 测试通过（54 个测试套件）
+- **已完成**: 12/12 (100%)
+- **总用时**: ~7.5 小时
+- **测试覆盖**: 1106/1106 测试通过（60 个测试套件）
 - **最新 Commit**: (pending)
 
 ---
