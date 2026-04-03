@@ -1,8 +1,13 @@
+import { z } from 'zod'
 import { AgentRole, AgentResponse, AgentContext, Task, AgentConfig } from './types'
 import { generateId } from '../utils/id'
 import { extractJSONObject } from '../utils/json-parser'
 import { getLLMProvider } from '../llm/factory'
 import { ChatMessage } from '../llm/types'
+
+export type ParseResultSuccess<T> = { success: true; data: T }
+export type ParseResultFailure = { success: false; error: string; raw?: unknown }
+export type ParseResult<T> = ParseResultSuccess<T> | ParseResultFailure
 
 declare global {
    
@@ -61,8 +66,31 @@ export abstract class BaseAgent {
     ])
   }
 
-  protected parseJSONResponse<T>(response: string): T | null {
-    return extractJSONObject(response) as T | null
+  protected parseJSONResponse<T>(response: string, schema: z.ZodType<T>): ParseResult<T>
+  protected parseJSONResponse<T>(response: string): T | null
+  protected parseJSONResponse<T>(response: string, schema?: z.ZodType<T>): T | null | ParseResult<T> {
+    const raw = extractJSONObject(response)
+
+    if (!schema) {
+      return raw as T | null
+    }
+
+    if (!raw) {
+      return { success: false, error: 'No JSON object found in response' }
+    }
+
+    const validated = schema.safeParse(raw)
+    if (validated.success) {
+      return { success: true, data: validated.data }
+    }
+
+    const errorMessages = validated.error.issues
+      .map((issue: { path: (string | number)[]; message: string }) =>
+        `${issue.path.join('.')}: ${issue.message}`
+      )
+      .join('; ')
+
+    return { success: false, error: errorMessages, raw }
   }
 
   protected async executeWithLLMFallback<T extends AgentResponse>(
