@@ -61,6 +61,34 @@ export class TextLogFormatter implements StructuredLogFormatter {
   }
 }
 
+/**
+ * Console transport that outputs logs to console methods
+ */
+export class ConsoleLogTransport implements StructuredLogTransport {
+  private formatter: StructuredLogFormatter
+
+  constructor(formatter: StructuredLogFormatter = new TextLogFormatter()) {
+    this.formatter = formatter
+  }
+
+  log(entry: StructuredLogEntry): void {
+    const formatted = this.formatter.format(entry)
+    switch (entry.level) {
+      case StructuredLogLevel.DEBUG:
+      case StructuredLogLevel.INFO:
+        console.log(formatted)
+        break
+      case StructuredLogLevel.WARN:
+        console.warn(formatted)
+        break
+      case StructuredLogLevel.ERROR:
+      case StructuredLogLevel.SILENT:
+        console.error(formatted)
+        break
+    }
+  }
+}
+
 export interface StructuredLoggerOptions {
   minLevel?: StructuredLogLevel
   transports?: StructuredLogTransport[]
@@ -78,7 +106,8 @@ export class StructuredLogger {
 
   constructor(options: StructuredLoggerOptions = {}) {
     this.minLevel = options.minLevel ?? (process.env.NODE_ENV === 'production' ? StructuredLogLevel.INFO : StructuredLogLevel.DEBUG)
-    this.transports = options.transports ?? []
+    // Default to console transport if no transports provided
+    this.transports = options.transports ?? [new ConsoleLogTransport()]
     this.baseContext = options.context ?? {}
     this._traceId = options.traceId
     this._spanId = options.spanId
