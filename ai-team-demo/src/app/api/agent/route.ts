@@ -9,6 +9,7 @@ import { PersistedAgentConfigSchema } from '@/types/agent-config'
 import type { PersistedAgentConfig } from '@/types/agent-config'
 import { withRateLimit, withErrorHandling, withAuth, successResponse, errorResponse } from '@/lib/api/route-utils'
 import { getLLMProvider } from '@/lib/llm/factory'
+import { AgentPostRequestSchema, AgentPutRequestSchema, parseRequestBody } from '@/lib/api/schemas'
 
 const fsManager = new FileSystemManager(process.cwd())
 const storageManager = new StorageManager()
@@ -16,16 +17,10 @@ const gitManager = new GitManager(process.cwd())
 
 export const POST = withRateLimit(async (request: NextRequest) => {
   const body = await request.json()
-  const { agentId, userMessage, conversationId } = body
+  const parsed = parseRequestBody(AgentPostRequestSchema, body)
+  if ('error' in parsed) return parsed.error
 
-  if (!InputValidator.validateAgentId(agentId)) {
-    return errorResponse('Invalid agent ID', 400)
-  }
-
-  const messageValidation = InputValidator.validateMessage(userMessage)
-  if (!messageValidation.valid) {
-    return errorResponse(messageValidation.error, 400)
-  }
+  const { agentId, userMessage, conversationId } = parsed.data
 
   let conversation = conversationId
     ? await storageManager.loadConversation(conversationId)
@@ -266,11 +261,10 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
 export const PUT = withAuth(async (request: NextRequest) => {
   const body = await request.json()
-  const { agentId, ...updates } = body
+  const parsed = parseRequestBody(AgentPutRequestSchema, body)
+  if ('error' in parsed) return parsed.error
 
-  if (!InputValidator.validateAgentId(agentId)) {
-    return errorResponse('Invalid agent ID', 400)
-  }
+  const { agentId, ...updates } = parsed.data
 
   const agent = await storageManager.loadAgent(agentId)
   if (!agent) {

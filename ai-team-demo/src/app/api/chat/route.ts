@@ -1,17 +1,15 @@
 import { NextRequest } from 'next/server'
 
 import { orchestrator } from '@/lib/orchestrator'
-import { withRateLimit, withErrorHandling, successResponse, errorResponse } from '@/lib/api/route-utils'
+import { withRateLimit, withErrorHandling, successResponse } from '@/lib/api/route-utils'
+import { ChatRequestSchema, parseRequestBody } from '@/lib/api/schemas'
 
 export const POST = withRateLimit(async (request: NextRequest) => {
   const body = await request.json()
-  const userMessage = body.message
+  const parsed = parseRequestBody(ChatRequestSchema, body)
+  if ('error' in parsed) return parsed.error
 
-  if (!userMessage) {
-    return errorResponse({ error: '消息不能为空' }, 400)
-  }
-
-  const result = await orchestrator.executeUserRequest(userMessage)
+  const result = await orchestrator.executeUserRequest(parsed.data.message)
 
   return successResponse({
     message: result.messages[result.messages.length - 1]?.content,
