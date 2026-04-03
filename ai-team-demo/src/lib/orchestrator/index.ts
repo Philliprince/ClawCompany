@@ -152,6 +152,7 @@ export class Orchestrator extends BaseOrchestrator {
               for (const file of devResponse.files) {
                 try {
                   await cb.saveFile?.(file.path, file.content)
+                  console.log(`Saved file: ${file.path}`)
                   this.log.info('File saved', { path: file.path })
                   this.logInfo('File saved', { path: file.path })
                 } catch (error) {
