@@ -93,9 +93,16 @@ export class OpenClawAgentExecutor {
         }
       }
 
+      if (!result.childSessionKey) {
+        return {
+          success: false,
+          error: `Spawn accepted but no childSessionKey returned (runId: ${result.runId ?? 'unknown'})`
+        }
+      }
+
       const completionTimeout = (config.timeout || 300) * 1000
       const content = await this.client.waitForCompletion(
-        result.childSessionKey!,
+        result.childSessionKey,
         completionTimeout
       )
 

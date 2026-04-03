@@ -144,7 +144,13 @@ export class OpenClawGatewayClient {
         }
       })
 
-      this.ws!.send(JSON.stringify(request))
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        clearTimeout(timeoutId)
+        this.pendingCalls.delete(id)
+        reject(new Error('WebSocket disconnected before sending request'))
+        return
+      }
+      this.ws.send(JSON.stringify(request))
     })
   }
 
