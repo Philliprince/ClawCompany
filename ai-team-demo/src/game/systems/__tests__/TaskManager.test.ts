@@ -368,6 +368,152 @@ describe('TaskManager', () => {
       expect(smallManager.getTaskHistory().length).toBeLessThanOrEqual(2);
     });
   });
+
+  describe('Phase 2: 4-agent concurrent tasks', () => {
+    it('should assign tasks to 4 agents simultaneously', () => {
+      const agents = ['alice', 'bob', 'charlie', 'diana'];
+      agents.forEach(agent => {
+        taskManager.assignTask(agent, createTestTask({ agentId: agent }));
+      });
+
+      agents.forEach(agent => {
+        expect(taskManager.getTaskByAgent(agent)).toBeDefined();
+        expect(taskManager.getTaskByAgent(agent)!.agentId).toBe(agent);
+      });
+    });
+
+    it('should emit task:assigned for each agent', () => {
+      const handler = jest.fn();
+      eventBus.on('task:assigned', handler);
+
+      ['alice', 'bob', 'charlie', 'diana'].forEach(agent => {
+        taskManager.assignTask(agent, createTestTask({ agentId: agent }));
+      });
+
+      expect(handler).toHaveBeenCalledTimes(4);
+      const agentIds = handler.mock.calls.map(call => call[0].agentId);
+      expect(agentIds).toContain('alice');
+      expect(agentIds).toContain('bob');
+      expect(agentIds).toContain('charlie');
+      expect(agentIds).toContain('diana');
+    });
+
+    it('should update progress independently for 4 agents', () => {
+      const agents = ['alice', 'bob', 'charlie', 'diana'];
+      agents.forEach((agent, i) => {
+        taskManager.assignTask(agent, createTestTask({ agentId: agent }));
+        taskManager.updateProgress(agent, (i + 1) * 25);
+      });
+
+      expect(taskManager.getTaskByAgent('alice')!.progress).toBe(25);
+      expect(taskManager.getTaskByAgent('bob')!.progress).toBe(50);
+      expect(taskManager.getTaskByAgent('charlie')!.progress).toBe(75);
+      expect(taskManager.getTaskByAgent('diana')!.progress).toBe(100);
+    });
+
+    it('should maintain Map integrity with 4 active tasks', () => {
+      const agents = ['alice', 'bob', 'charlie', 'diana'];
+      agents.forEach(agent => {
+        taskManager.assignTask(agent, createTestTask({ id: `task-${agent}`, agentId: agent }));
+      });
+
+      const allActive = taskManager.getAllActiveTasks();
+      expect(allActive).toHaveLength(4);
+
+      const activeIds = allActive.map(t => t.id).sort();
+      expect(activeIds).toEqual(['task-alice', 'task-bob', 'task-charlie', 'task-diana']);
+    });
+  });
+
+  describe('Phase 2: edge cases', () => {
+    it('should handle agent completing task then receiving new task', () => {
+      taskManager.assignTask('alice', createTestTask({ id: 'task-1', agentId: 'alice' }));
+      taskManager.completeTask('alice', 'success');
+
+      expect(taskManager.getTaskByAgent('alice')).toBeUndefined();
+
+      taskManager.assignTask('alice', createTestTask({ id: 'task-2', agentId: 'alice' }));
+      expect(taskManager.getTaskByAgent('alice')!.id).toBe('task-2');
+    });
+
+    it('should handle agent with no task returning undefined', () => {
+      expect(taskManager.getTaskByAgent('alice')).toBeUndefined();
+    });
+
+    it('should handle task failure with progress preserved in history', () => {
+      taskManager.assignTask('alice', createTestTask({ id: 'fail-task', agentId: 'alice' }));
+      taskManager.updateProgress('alice', 60);
+
+      taskManager.completeTask('alice', 'failure');
+
+      expect(taskManager.getTaskByAgent('alice')).toBeUndefined();
+      const history = taskManager.getTaskHistory();
+      expect(history).toHaveLength(1);
+      expect(history[0].status).toBe('failed');
+      expect(history[0].progress).toBe(60);
+    });
+
+    it('should handle completeTask for agent with no task', () => {
+      expect(() => taskManager.completeTask('unknown', 'success')).not.toThrow();
+    });
+
+    it('should handle handover between busy agents', () => {
+      taskManager.assignTask('alice', createTestTask({ id: 't1', agentId: 'alice' }));
+      taskManager.assignTask('bob', createTestTask({ id: 't2', agentId: 'bob' }));
+
+      taskManager.handoverTask('alice', 'bob', 't1');
+
+      expect(taskManager.getTaskByAgent('alice')).toBeUndefined();
+      expect(taskManager.getTaskByAgent('bob')!.id).toBe('t1');
+    });
+
+    it('should handle rapid assign-complete-assign cycles', () => {
+      for (let i = 0; i < 10; i++) {
+        taskManager.assignTask('alice', createTestTask({ id: `task-${i}`, agentId: 'alice' }));
+        taskManager.completeTask('alice', i % 3 === 0 ? 'failure' : 'success');
+      }
+
+      expect(taskManager.getTaskByAgent('alice')).toBeUndefined();
+      expect(taskManager.getTaskHistory().length).toBe(10);
+    });
+  });
+
+  describe('Phase 2: performance stress test', () => {
+    it('should handle 100 rapid progress updates across 4 agents', () => {
+      const agents = ['alice', 'bob', 'charlie', 'diana'];
+      agents.forEach(agent => {
+        taskManager.assignTask(agent, createTestTask({ agentId: agent }));
+      });
+
+      const handler = jest.fn();
+      eventBus.on('task:progress', handler);
+
+      for (let i = 0; i < 100; i++) {
+        agents.forEach(agent => {
+          taskManager.updateProgress(agent, i + 1, `Processing ${i + 1}%`);
+        });
+      }
+
+      expect(handler).toHaveBeenCalledTimes(400);
+
+      expect(taskManager.getTaskByAgent('alice')!.progress).toBe(100);
+      expect(taskManager.getTaskByAgent('bob')!.progress).toBe(100);
+      expect(taskManager.getTaskByAgent('charlie')!.progress).toBe(100);
+      expect(taskManager.getTaskByAgent('diana')!.progress).toBe(100);
+    });
+
+    it('should not leak memory with many task cycles', () => {
+      const limitedManager = new TaskManager(eventBus, { maxHistorySize: 50 });
+
+      for (let i = 0; i < 200; i++) {
+        limitedManager.assignTask('alice', createTestTask({ id: `task-${i}`, agentId: 'alice' }));
+        limitedManager.completeTask('alice', 'success');
+      }
+
+      expect(limitedManager.getTaskHistory().length).toBeLessThanOrEqual(50);
+      expect(limitedManager.getAllActiveTasks()).toHaveLength(0);
+    });
+  });
 });
 
 function createTestTask(overrides: Partial<Task> = {}): Task {
