@@ -1,6 +1,7 @@
 export type RoomName = 'pm-office' | 'dev-studio' | 'test-lab' | 'review-center';
 
 export type { TaskType } from './Task'
+import type { TaskType } from './Task'
 
 export interface Workstation {
   id: string;

@@ -151,8 +151,8 @@ export default function TeamChatPage() {
       id: `${agent.id}-${Date.now()}`,
       agentId: agent.id,
       agentName: agent.name,
-      emoji: agent.emoji,
-      color: agent.color,
+      emoji: agent.emoji || '🤖',
+      color: agent.color || '#3b82f6',
       content,
       timestamp: new Date(),
       files: files.length > 0 ? files : undefined
