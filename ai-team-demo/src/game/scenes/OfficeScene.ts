@@ -129,7 +129,7 @@ export class OfficeScene extends Phaser.Scene {
   private createParticleTexture(): void {
     const graphics = this.add.graphics();
     graphics.fillStyle(0x00ff00, 1);
-    graphics.fillStar(4, 4, 5, 4, 2);
+    graphics.fillCircle(4, 4, 4);
     graphics.generateTexture('particle', 8, 8);
     graphics.destroy();
 
@@ -143,13 +143,13 @@ export class OfficeScene extends Phaser.Scene {
 
     const errorGraphics = this.add.graphics();
     errorGraphics.fillStyle(0xff4444, 1);
-    errorGraphics.fillStar(3, 3, 4, 3, 1.5);
+    errorGraphics.fillCircle(3, 3, 3);
     errorGraphics.generateTexture('particle-error', 6, 6);
     errorGraphics.destroy();
 
     const sparkleGraphics = this.add.graphics();
     sparkleGraphics.fillStyle(0xffdd00, 1);
-    sparkleGraphics.fillStar(3, 3, 4, 3, 1);
+    sparkleGraphics.fillCircle(3, 3, 3);
     sparkleGraphics.generateTexture('particle-sparkle', 6, 6);
     sparkleGraphics.destroy();
 

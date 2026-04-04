@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/api/route-utils';
 import { getGameEventStore } from '@/game/data/GameEventStore';
@@ -80,9 +80,9 @@ export const POST = withAuth(async (request: NextRequest) => {
     const body = await request.json();
 
     if (!body || !body.type) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Event type is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      return NextResponse.json(
+        { success: false, error: 'Event type is required' },
+        { status: 400 }
       );
     }
 
@@ -95,17 +95,15 @@ export const POST = withAuth(async (request: NextRequest) => {
 
     store.push(event);
 
-    return new Response(
-      JSON.stringify({ success: true, event }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+    return NextResponse.json({ success: true, event }, { status: 200 });
   } catch (error) {
-    return new Response(
-      JSON.stringify({
+    return NextResponse.json(
+      {
         success: false,
         error: error instanceof Error ? error.message : 'Invalid request body',
-      }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
+      },
+      { status: 400 }
     );
   }
-}
+});
+
