@@ -133,17 +133,18 @@ export class TaskManager {
       throw new Error(result.error)
     }
     const data = result.data
-    if (typeof data !== 'object' || data === null || !('projectId' in data) || typeof (data as any).projectId !== 'string') {
+    type TaskManagerData = { projectId: string; tasks: [string, Partial<Task>][] }
+    if (typeof data !== 'object' || data === null || !('projectId' in data) || typeof (data as TaskManagerData).projectId !== 'string') {
       throw new Error('projectId is required')
     }
-    if (!('tasks' in data) || !Array.isArray((data as any).tasks)) {
+    if (!('tasks' in data) || !Array.isArray((data as TaskManagerData).tasks)) {
       throw new Error('tasks must be an array')
     }
 
-    const manager = new TaskManager((data as any).projectId)
-    for (const entry of (data as any).tasks) {
+    const manager = new TaskManager((data as TaskManagerData).projectId)
+    for (const entry of (data as TaskManagerData).tasks) {
       if (!Array.isArray(entry) || entry.length < 2) continue
-      const [id, task] = entry as [string, any]
+      const [id, task] = entry as [string, Partial<Task> & { title: string; description: string; status: string; assignedTo: string }]
       if (typeof task.title !== 'string' || typeof task.description !== 'string') {
         throw new Error('Task missing required fields: title and description')
       }

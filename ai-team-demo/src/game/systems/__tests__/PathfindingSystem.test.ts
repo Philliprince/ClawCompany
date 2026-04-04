@@ -2,7 +2,7 @@ import { PathfindingSystem } from '../PathfindingSystem';
 import { NavigationMesh } from '../../data/NavigationMesh';
 import { TILE_SIZE } from '../../config/gameConfig';
 
-jest.mock('phaser', () => ({}));
+jest.mock('phaser');
 
 function createMockScene() {
   const graphics = {

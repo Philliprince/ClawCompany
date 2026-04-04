@@ -9,7 +9,7 @@ import {
   RetryConfig,
   AgentResponse,
 } from './types'
-import { StructuredLogger, StructuredLogEntry } from './structured-logger'
+import { Logger, LogEntry } from './logger'
 import { PerformanceMonitor } from './performance-monitor'
 import { ErrorTracker, ErrorSummary } from './error-tracker'
 import { OrchestratorError, AppError, isAppError } from './errors'
@@ -36,7 +36,7 @@ export interface OrchestratorCallbacks {
 }
 
 export interface ObservabilityConfig {
-  logger?: StructuredLogger
+  logger?: Logger
   performanceMonitor?: PerformanceMonitor
   errorTracker?: ErrorTracker
   eventBus?: AgentEventBus
@@ -54,13 +54,13 @@ export abstract class BaseOrchestrator {
   protected failedTasks: FailedTask[] = []
   protected startTime: number = 0
   protected obs: {
-    logger: StructuredLogger | null
+    logger: Logger | null
     perf: PerformanceMonitor
     errors: ErrorTracker
     eventBus: AgentEventBus
   }
   protected logCount: number = 0
-  private capturedLogs: StructuredLogEntry[] = []
+  private capturedLogs: LogEntry[] = []
 
   constructor(retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig) {
     this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...retryConfig }

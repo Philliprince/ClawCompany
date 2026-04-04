@@ -6,37 +6,83 @@ export enum LogLevel {
   SILENT = 4,
 }
 
+const LEVEL_NAMES: Record<LogLevel, string> = {
+  [LogLevel.DEBUG]: 'DEBUG',
+  [LogLevel.INFO]: 'INFO',
+  [LogLevel.WARN]: 'WARN',
+  [LogLevel.ERROR]: 'ERROR',
+  [LogLevel.SILENT]: 'SILENT',
+}
+
 export interface LogEntry {
-  level: LogLevel
-  message: string
   timestamp: string
+  level: LogLevel
+  levelName: string
+  message: string
   context: Record<string, unknown>
+  traceId?: string
+  spanId?: string
 }
 
 export interface LogTransport {
   log(entry: LogEntry): void
 }
 
-class ConsoleTransport implements LogTransport {
-  log(entry: LogEntry): void {
-    const levelName = LogLevel[entry.level]
-    const prefix = `[${entry.timestamp}] [${levelName}]`
-    const ctxStr = Object.keys(entry.context).length > 0
-      ? ` ${JSON.stringify(entry.context)}`
-      : ''
+export interface LogFormatter {
+  format(entry: LogEntry): string
+}
 
+export class JsonLogFormatter implements LogFormatter {
+  format(entry: LogEntry): string {
+    return JSON.stringify({
+      timestamp: entry.timestamp,
+      level: entry.levelName,
+      message: entry.message,
+      context: entry.context,
+      ...(entry.traceId ? { traceId: entry.traceId } : {}),
+      ...(entry.spanId ? { spanId: entry.spanId } : {}),
+    })
+  }
+}
+
+export class TextLogFormatter implements LogFormatter {
+  format(entry: LogEntry): string {
+    const parts = [`[${entry.timestamp}]`, `[${entry.levelName}]`, entry.message]
+    if (Object.keys(entry.context).length > 0) {
+      parts.push(JSON.stringify(entry.context))
+    }
+    if (entry.traceId) {
+      parts.push(`traceId=${entry.traceId}`)
+    }
+    if (entry.spanId) {
+      parts.push(`spanId=${entry.spanId}`)
+    }
+    return parts.join(' ')
+  }
+}
+
+export class ConsoleTransport implements LogTransport {
+  private formatter: LogFormatter
+
+  constructor(formatter: LogFormatter = new TextLogFormatter()) {
+    this.formatter = formatter
+  }
+
+  log(entry: LogEntry): void {
+    const formatted = this.formatter.format(entry)
     switch (entry.level) {
       case LogLevel.DEBUG:
-        console.debug(`${prefix} ${entry.message}${ctxStr}`)
+        console.debug(formatted)
         break
       case LogLevel.INFO:
-        console.info(`${prefix} ${entry.message}${ctxStr}`)
+        console.info(formatted)
         break
       case LogLevel.WARN:
-        console.warn(`${prefix} ${entry.message}${ctxStr}`)
+        console.warn(formatted)
         break
       case LogLevel.ERROR:
-        console.error(`${prefix} ${entry.message}${ctxStr}`)
+      case LogLevel.SILENT:
+        console.error(formatted)
         break
     }
   }
@@ -46,17 +92,23 @@ export interface LoggerOptions {
   minLevel?: LogLevel
   transports?: LogTransport[]
   context?: Record<string, unknown>
+  traceId?: string
+  spanId?: string
 }
 
 export class Logger {
   private minLevel: LogLevel
   private transports: LogTransport[]
   private baseContext: Record<string, unknown>
+  private _traceId?: string
+  private _spanId?: string
 
   constructor(options: LoggerOptions = {}) {
     this.minLevel = options.minLevel ?? (process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG)
     this.transports = options.transports ?? [new ConsoleTransport()]
     this.baseContext = options.context ?? {}
+    this._traceId = options.traceId
+    this._spanId = options.spanId
   }
 
   debug(message: string, context?: Record<string, unknown>): void {
@@ -75,11 +127,25 @@ export class Logger {
     this.log(LogLevel.ERROR, message, context)
   }
 
-  child(context: Record<string, unknown>): Logger {
+  setLevel(level: LogLevel): void {
+    this.minLevel = level
+  }
+
+  get traceId(): string | undefined {
+    return this._traceId
+  }
+
+  get spanId(): string | undefined {
+    return this._spanId
+  }
+
+  child(context: Record<string, unknown>, spanId?: string): Logger {
     return new Logger({
       minLevel: this.minLevel,
       transports: this.transports,
       context: { ...this.baseContext, ...context },
+      traceId: this._traceId,
+      spanId: spanId ?? this._spanId,
     })
   }
 
@@ -90,7 +156,11 @@ export class Logger {
     if (context) {
       for (const [key, value] of Object.entries(context)) {
         if (value instanceof Error) {
-          mergedContext[key] = value.message
+          mergedContext[key] = {
+            name: value.name,
+            message: value.message,
+            stack: value.stack,
+          }
         } else {
           mergedContext[key] = value
         }
@@ -98,10 +168,13 @@ export class Logger {
     }
 
     const entry: LogEntry = {
-      level,
-      message,
       timestamp: new Date().toISOString(),
+      level,
+      levelName: LEVEL_NAMES[level],
+      message,
       context: mergedContext,
+      traceId: this._traceId,
+      spanId: this._spanId,
     }
 
     for (const transport of this.transports) {

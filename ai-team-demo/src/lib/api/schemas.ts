@@ -1,7 +1,7 @@
 import { z } from 'zod'
+import type { NextResponse } from 'next/server'
 
 import { errorResponse } from './route-utils'
-import type { NextResponse } from 'next/server'
 
 export const ChatRequestSchema = z.object({
   message: z.string().min(1, '消息不能为空').max(10000, '消息不能超过 10000 字符'),

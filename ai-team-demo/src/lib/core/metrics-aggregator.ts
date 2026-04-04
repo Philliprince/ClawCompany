@@ -1,6 +1,6 @@
-import { PerformanceMonitor, MetricEntry } from './performance-monitor'
+import { PerformanceMonitor, MetricEntry, MetricType, PerformanceSnapshot } from './performance-monitor'
 import { ErrorTracker, ErrorSummary } from './error-tracker'
-import { StructuredLogger } from './structured-logger'
+import { Logger } from './logger'
 
 export interface PerformanceMetrics {
   memoryUsage: {
@@ -45,7 +45,7 @@ export interface MetricsDataSource {
 export class MetricsAggregator {
   private perfMonitor: PerformanceMonitor
   private errorTracker: ErrorTracker
-  private logger: StructuredLogger
+  private logger: Logger
   private metricsDataSource?: MetricsDataSource
   private lastMetrics: PerformanceMetrics | null = null
   private updateIntervalMs: number = 5000
@@ -53,7 +53,7 @@ export class MetricsAggregator {
   constructor(
     perfMonitor: PerformanceMonitor,
     errorTracker: ErrorTracker,
-    logger: StructuredLogger,
+    logger: Logger,
     metricsDataSource?: MetricsDataSource
   ) {
     this.perfMonitor = perfMonitor
@@ -69,7 +69,7 @@ export class MetricsAggregator {
     const snapshot = this.perfMonitor.snapshot()
     const entries: MetricEntry[] = []
     for (const [name, value] of Object.entries(snapshot.counters)) {
-      entries.push({ name, value, type: 0 as any, timestamp: snapshot.timestamp })
+      entries.push({ name, value, type: MetricType.COUNTER, timestamp: snapshot.timestamp })
     }
     return entries
   }
@@ -155,7 +155,7 @@ export class MetricsAggregator {
     }
   }
 
-  private calculatePerformanceMetrics(performance: any): PerformanceMetrics['performance'] {
+  private calculatePerformanceMetrics(_performance: PerformanceSnapshot): PerformanceMetrics['performance'] {
     const metricEntries = this.getAllMetricEntries()
     const responseTimes = metricEntries
       .filter((e: MetricEntry) => e.name.startsWith('response.time'))
