@@ -1,11 +1,11 @@
 import { BaseOrchestrator, OrchestratorCallbacks } from '../base-orchestrator'
-import { AgentContext, AgentResponse, AgentRole, Task } from '../types'
+import { AgentContext, AgentResponse, AgentRole, Task, FileChange, RetryConfig } from '../types'
 
 class TestOrchestrator extends BaseOrchestrator {
   private callbacks: OrchestratorCallbacks
 
-  constructor(callbacks: OrchestratorCallbacks) {
-    super()
+  constructor(callbacks: OrchestratorCallbacks, retryConfig?: Partial<RetryConfig>) {
+    super(retryConfig)
     this.callbacks = callbacks
   }
 
@@ -23,6 +23,16 @@ class TestOrchestrator extends BaseOrchestrator {
 
   exposeBuildContext(callbacks: OrchestratorCallbacks): AgentContext {
     return this.buildContext(callbacks)
+  }
+
+  async exposeExecuteSingleTask(
+    task: Task,
+    cb: OrchestratorCallbacks,
+    subTaskIds: string[],
+    completedTaskIds: Set<string>,
+    allFiles: import('../types').FileChange[],
+  ): Promise<void> {
+    return this.executeSingleTask(task, cb, subTaskIds, completedTaskIds, allFiles)
   }
 }
 
@@ -210,5 +220,168 @@ describe('BaseOrchestrator - buildContext', () => {
 
     expect(Object.keys(context.files).length).toBeGreaterThan(0)
     expect(context.chatHistory.length).toBeGreaterThan(0)
+  })
+})
+
+describe('BaseOrchestrator - executeSingleTask', () => {
+  it('should execute task assigned to review role directly', async () => {
+    const reviewTask: Task = {
+      id: 'review-task-1',
+      title: 'Code Review',
+      description: 'Review the existing code',
+      status: 'pending',
+      assignedTo: 'review',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockResolvedValue({
+        agent: 'review' as AgentRole,
+        message: 'Review approved',
+        status: 'success' as const,
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      reviewTask,
+      callbacks,
+      ['review-task-1'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(callbacks.executeAgent).toHaveBeenCalledWith(
+      'review',
+      reviewTask,
+      expect.any(Object),
+    )
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('review-task-1', 'in_progress')
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('review-task-1', 'done')
+    expect(completedTaskIds.has('review-task-1')).toBe(true)
+    expect(callbacks.broadcast).toHaveBeenCalledWith('review', 'Review approved')
+  })
+
+  it('should execute task assigned to pm role directly', async () => {
+    const pmTask: Task = {
+      id: 'pm-task-1',
+      title: 'Analysis',
+      description: 'Analyze requirements',
+      status: 'pending',
+      assignedTo: 'pm',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockResolvedValue({
+        agent: 'pm' as AgentRole,
+        message: 'Analysis done',
+        status: 'success' as const,
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      pmTask,
+      callbacks,
+      ['pm-task-1'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(callbacks.executeAgent).toHaveBeenCalledWith(
+      'pm',
+      pmTask,
+      expect.any(Object),
+    )
+    expect(completedTaskIds.has('pm-task-1')).toBe(true)
+  })
+
+  it('should record failure when non-dev task agent fails after retries', async () => {
+    const reviewTask: Task = {
+      id: 'review-task-1',
+      title: 'Review',
+      description: 'Review code',
+      status: 'pending',
+      assignedTo: 'review',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockRejectedValue(new Error('Review agent crashed')),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks, { maxRetries: 0, initialDelay: 1, maxDelay: 1, backoffMultiplier: 1 })
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      reviewTask,
+      callbacks,
+      ['review-task-1'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(completedTaskIds.has('review-task-1')).toBe(false)
+    const obs = orchestrator.getObservability()
+    expect(obs.errorSummary.total).toBeGreaterThan(0)
+  })
+
+  it('should emit task:started and task:completed events for review task', async () => {
+    const reviewTask: Task = {
+      id: 'review-task-1',
+      title: 'Review',
+      description: 'Review code',
+      status: 'pending',
+      assignedTo: 'review',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockResolvedValue({
+        agent: 'review' as AgentRole,
+        message: 'Looks good',
+        status: 'success' as const,
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      reviewTask,
+      callbacks,
+      ['review-task-1'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    const events = orchestrator.getEventBus().getHistory()
+    const startedEvents = events.filter(e => e.type === 'task:started' && e.taskId === 'review-task-1')
+    const completedEvents = events.filter(e => e.type === 'task:completed' && e.taskId === 'review-task-1')
+    expect(startedEvents.length).toBe(1)
+    expect(startedEvents[0].agentRole).toBe('review')
+    expect(completedEvents.length).toBe(1)
+    expect(completedEvents[0].agentRole).toBe('review')
   })
 })

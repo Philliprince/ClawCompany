@@ -193,7 +193,6 @@ export class Orchestrator extends BaseOrchestrator {
     } catch (error) {
       this.logError('Fatal error in executeUserRequest', { error: error instanceof Error ? error.message : 'Unknown error' })
       this.obs.errors.track(error instanceof Error ? error : new Error(String(error)))
-      this.logError('Fatal error in workflow', { error: error instanceof Error ? error.message : 'Unknown error' })
       this.getEventBus().emit({
         type: 'workflow:failed',
         data: { error: error instanceof Error ? error.message : 'Unknown error' },

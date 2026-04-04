@@ -132,8 +132,7 @@ describe('Orchestrator Observability Integration', () => {
       expect(result.success).toBe(false)
       expect(result.error?.message).toContain('Fatal error that escapes retry')
       
-      // The error should be caught and logged at the top level
-      const fatalLog = capturedLogs.find(l => l.message === 'Fatal error in workflow' && l.level === StructuredLogLevel.ERROR)
+      const fatalLog = capturedLogs.find(l => l.message === 'Fatal error in executeUserRequest' && l.level === StructuredLogLevel.ERROR)
       expect(fatalLog).toBeDefined()
     })
 
@@ -280,7 +279,7 @@ describe('Orchestrator Observability Integration', () => {
       orchestrator = new Orchestrator('test-project', fastRetry, { logger, performanceMonitor: perfMonitor, errorTracker: errTracker })
       await orchestrator.executeUserRequest('test')
 
-      const skipLog = capturedLogs.find(l => l.message === 'Task skipped due to unmet dependency' && l.level === StructuredLogLevel.WARN)
+      const skipLog = capturedLogs.find(l => l.message === 'Skipping task: dependency not completed' && l.level === StructuredLogLevel.WARN)
       expect(skipLog).toBeDefined()
       expect(skipLog!.context).toHaveProperty('taskId')
     }, 10000)
