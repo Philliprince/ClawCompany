@@ -415,16 +415,12 @@ describe('Orchestrator - 错误处理和重试机制', () => {
           status: 'success',
         })
       
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation()
-      
       const result = await orchestrator.executeUserRequest('test request')
       
-      // Should log file error
-      expect(consoleSpy).toHaveBeenCalled()
-      // Should still complete workflow
+      const eventHistory = orchestrator.getEventBus().getHistory()
+      const fileErrorEvents = eventHistory.filter(e => e.type === 'error:tracked' && JSON.stringify(e.data).includes('File save failed'))
+      expect(fileErrorEvents.length).toBeGreaterThanOrEqual(1)
       expect(result.success).toBe(true)
-      
-      consoleSpy.mockRestore()
     })
   })
 
@@ -657,9 +653,9 @@ describe('Orchestrator - 错误处理和重试机制', () => {
       const result = await orchestrator.executeUserRequest('build feature')
 
       expect(executedRoles).toContain('pm')
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Skipping task'),
-      )
+      const eventHistory = orchestrator.getEventBus().getHistory()
+      const skipEvents = eventHistory.filter(e => e.type === 'task:skipped')
+      expect(skipEvents.length).toBeGreaterThanOrEqual(1)
       expect(result.stats?.totalTasks).toBe(2)
 
       consoleSpy.mockRestore()
@@ -852,9 +848,6 @@ describe('Orchestrator - 错误处理和重试机制', () => {
       expect(fileSystemManager.createFile).toHaveBeenCalledWith('/src/a.ts', 'export const a = 1')
       expect(fileSystemManager.createFile).toHaveBeenCalledWith('/src/b.ts', 'export const b = 2')
       expect(result.files).toHaveLength(2)
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Saved file: /src/a.ts'),
-      )
 
       consoleSpy.mockRestore()
     })

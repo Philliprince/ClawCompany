@@ -423,7 +423,7 @@ export abstract class BaseOrchestrator {
     for (const file of files) {
       try {
         await cb.saveFile?.(file.path, file.content)
-        this.logInfo(`Saved file: ${file.path}`)
+        this.logInfo('File saved', { path: file.path })
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error)
         this.logError('File save failed', { path: file.path, error: errMsg })
