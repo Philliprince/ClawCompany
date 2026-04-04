@@ -4,7 +4,7 @@ import { EventBus } from '../../systems/EventBus';
 import { Task, TaskStatus } from '../../types/Task';
 
 jest.mock('phaser', () => {
-  const mockGraphics = {
+  const createMockGraphics = () => ({
     clear: jest.fn(),
     fillStyle: jest.fn(),
     fillRect: jest.fn(),
@@ -14,25 +14,31 @@ jest.mock('phaser', () => {
     setAlpha: jest.fn(),
     destroy: jest.fn(),
     alpha: 0,
-  };
+  });
 
-  const mockText = {
+  const createMockText = () => ({
     setText: jest.fn(),
     setOrigin: jest.fn(),
     width: 80,
     height: 16,
     setPosition: jest.fn(),
     destroy: jest.fn(),
-  };
+  });
 
-  const mockContainer = {
-    setPosition: jest.fn(),
-    setDepth: jest.fn(),
-    setAlpha: jest.fn(),
-    add: jest.fn(),
-    destroy: jest.fn(),
-    x: 0,
-    y: 0,
+  const createMockContainer = () => {
+    const c = {
+      x: 0,
+      y: 0,
+      setDepth: jest.fn(),
+      setAlpha: jest.fn(),
+      add: jest.fn(),
+      destroy: jest.fn(),
+      setPosition: jest.fn((x: number, y: number) => {
+        c.x = x;
+        c.y = y;
+      }),
+    };
+    return c;
   };
 
   const mockTimerEvent = {
@@ -41,9 +47,9 @@ jest.mock('phaser', () => {
 
   const mockScene = {
     add: {
-      container: jest.fn().mockReturnValue(mockContainer),
-      graphics: jest.fn().mockReturnValue(mockGraphics),
-      text: jest.fn().mockReturnValue(mockText),
+      container: jest.fn(() => createMockContainer()),
+      graphics: jest.fn(() => createMockGraphics()),
+      text: jest.fn(() => createMockText()),
     },
     time: {
       delayedCall: jest.fn().mockReturnValue(mockTimerEvent),
@@ -58,7 +64,7 @@ jest.mock('phaser', () => {
         Text: jest.fn(),
       },
     },
-    __mocks: { mockScene, mockGraphics, mockText, mockContainer, mockTimerEvent },
+    __mocks: { mockScene, mockTimerEvent },
   };
 });
 
@@ -190,6 +196,139 @@ describe('TaskVisualizer', () => {
 
     it('should handle destroy when empty', () => {
       expect(() => visualizer.destroy()).not.toThrow();
+    });
+  });
+
+  describe('Phase 2: multi-agent rendering', () => {
+    it('should create bubbles for 4 agents simultaneously', () => {
+      const agents = ['alice', 'bob', 'charlie', 'diana'];
+      agents.forEach(agent => {
+        const task = createTestTask({ agentId: agent, status: 'working' });
+        taskManager.assignTask(agent, task);
+        visualizer.updateAgentPosition(agent, agents.indexOf(agent) * 100, 200);
+      });
+
+      visualizer.update();
+
+      agents.forEach(agent => {
+        expect(visualizer.getTaskBubble(agent)).toBeDefined();
+        expect(visualizer.getProgressBar(agent)).toBeDefined();
+      });
+    });
+
+    it('should position bubbles at different locations based on agent positions', () => {
+      const positions = [
+        { agent: 'alice', x: 100, y: 100 },
+        { agent: 'bob', x: 300, y: 100 },
+        { agent: 'charlie', x: 500, y: 100 },
+        { agent: 'diana', x: 700, y: 100 },
+      ];
+
+      positions.forEach(({ agent, x, y }) => {
+        const task = createTestTask({ agentId: agent, status: 'working' });
+        taskManager.assignTask(agent, task);
+        visualizer.updateAgentPosition(agent, x, y);
+      });
+
+      visualizer.update();
+
+      const bubblePositions = positions.map(({ agent }) =>
+        visualizer.getTaskBubble(agent)!.getPosition()
+      );
+
+      const xCoords = bubblePositions.map(p => p.x);
+      const uniqueX = new Set(xCoords);
+      expect(uniqueX.size).toBe(4);
+    });
+
+    it('should update bubble positions when agents move', () => {
+      const task = createTestTask({ agentId: 'alice', status: 'working' });
+      taskManager.assignTask('alice', task);
+      visualizer.updateAgentPosition('alice', 100, 200);
+      visualizer.update();
+
+      const pos1 = visualizer.getTaskBubble('alice')!.getPosition();
+      expect(pos1.x).toBe(100);
+
+      visualizer.updateAgentPosition('alice', 250, 300);
+      visualizer.update();
+
+      const pos2 = visualizer.getTaskBubble('alice')!.getPosition();
+      expect(pos2.x).toBe(250);
+    });
+
+    it('should schedule hide for completed agents while others remain', () => {
+      ['alice', 'bob', 'charlie', 'diana'].forEach(agent => {
+        const task = createTestTask({ agentId: agent, status: 'working' });
+        taskManager.assignTask(agent, task);
+        visualizer.updateAgentPosition(agent, 100, 200);
+      });
+      visualizer.update();
+
+      const aliceBubble = visualizer.getTaskBubble('alice');
+      const isActiveSpy = jest.spyOn(aliceBubble!, 'isActive').mockReturnValue(true);
+
+      taskManager.completeTask('alice', 'success');
+      visualizer.update();
+
+      expect(visualizer.getTaskBubble('bob')).toBeDefined();
+      expect(visualizer.getTaskBubble('charlie')).toBeDefined();
+      expect(visualizer.getTaskBubble('diana')).toBeDefined();
+      expect(mockScene.time.delayedCall).toHaveBeenCalled();
+
+      isActiveSpy.mockRestore();
+    });
+
+    it('should recreate bubble when agent gets new task after completion', () => {
+      const task1 = createTestTask({ agentId: 'alice', id: 't1' });
+      taskManager.assignTask('alice', task1);
+      visualizer.updateAgentPosition('alice', 100, 200);
+      visualizer.update();
+
+      taskManager.completeTask('alice', 'success');
+
+      const task2 = createTestTask({ agentId: 'alice', id: 't2' });
+      taskManager.assignTask('alice', task2);
+      visualizer.update();
+
+      expect(visualizer.getTaskBubble('alice')).toBeDefined();
+    });
+  });
+
+  describe('Phase 2: performance stress test', () => {
+    it('should handle rapid update cycles with 4 agents', () => {
+      const agents = ['alice', 'bob', 'charlie', 'diana'];
+      agents.forEach(agent => {
+        const task = createTestTask({ agentId: agent, status: 'working' });
+        taskManager.assignTask(agent, task);
+        visualizer.updateAgentPosition(agent, 100, 200);
+      });
+
+      for (let i = 0; i < 100; i++) {
+        agents.forEach(agent => {
+          taskManager.updateProgress(agent, i + 1, `Processing ${i + 1}%`);
+        });
+        visualizer.update();
+      }
+
+      agents.forEach(agent => {
+        expect(visualizer.getTaskBubble(agent)).toBeDefined();
+        expect(visualizer.getProgressBar(agent)).toBeDefined();
+      });
+    });
+
+    it('should destroy all 4 agents resources cleanly', () => {
+      ['alice', 'bob', 'charlie', 'diana'].forEach(agent => {
+        const task = createTestTask({ agentId: agent });
+        visualizer.showTask(agent, task);
+      });
+
+      visualizer.destroy();
+
+      ['alice', 'bob', 'charlie', 'diana'].forEach(agent => {
+        expect(visualizer.getTaskBubble(agent)).toBeUndefined();
+        expect(visualizer.getProgressBar(agent)).toBeUndefined();
+      });
     });
   });
 });
