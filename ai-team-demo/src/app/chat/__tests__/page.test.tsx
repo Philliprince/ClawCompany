@@ -244,7 +244,7 @@ describe('Chat Page (/chat)', () => {
       fireEvent.click(sendButton)
       
       await waitFor(() => {
-        expect(screen.getByText(/done/i)).toBeInTheDocument()
+        expect(screen.getByText(/completed/i)).toBeInTheDocument()
       })
     })
   })
