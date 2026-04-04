@@ -20,6 +20,7 @@ import { SoundSystem } from '../systems/SoundSystem';
 import { TargetMarker } from '../ui/TargetMarker';
 import { OfficeDecorator } from '../ui/OfficeDecorator';
 import { TaskManager } from '../systems/TaskManager';
+import { TaskHandoverSystem } from '../systems/TaskHandoverSystem';
 import { TaskVisualizer } from '../ui/TaskVisualizer';
 import { EventBus } from '../systems/EventBus';
 import { ShadowRenderer } from '../sprites/ShadowRenderer';
@@ -75,6 +76,7 @@ export class OfficeScene extends Phaser.Scene {
   private workstationTimer: Phaser.Time.TimerEvent | null = null;
   private eventBus!: EventBus;
   private taskManager!: TaskManager;
+  private taskHandoverSystem!: TaskHandoverSystem;
   private taskVisualizer!: TaskVisualizer;
 
   private roomPositions: Record<string, { x: number; y: number }> = {
@@ -194,6 +196,7 @@ export class OfficeScene extends Phaser.Scene {
     this.createDecorations();
     this.createNavigationMesh();
     this.createAgents();
+    this.taskHandoverSystem = new TaskHandoverSystem(this.agentMap, this.eventBus);
     this.setupCollisions();
     this.setupDebug();
     this.setupWorkstationStatus();
@@ -648,6 +651,10 @@ export class OfficeScene extends Phaser.Scene {
     return this.taskVisualizer;
   }
 
+  getTaskHandoverSystem(): TaskHandoverSystem {
+    return this.taskHandoverSystem;
+  }
+
   private createDecorations(): void {
     if (!this.tilemapData) return;
 
@@ -787,6 +794,7 @@ export class OfficeScene extends Phaser.Scene {
     this.soundSystem.destroy();
     this.officeDecorator.destroy();
     this.taskVisualizer.destroy();
+    this.taskHandoverSystem.destroy();
     this.particleSystem.clearAllEffects();
     this.eventBridge?.disconnect();
     this.particleEmitters.forEach(e => e.destroy());
