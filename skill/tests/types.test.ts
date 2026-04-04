@@ -39,6 +39,12 @@ describe('Core Types', () => {
       ]
       expect(statuses).toHaveLength(5)
     })
+
+    test("'done' 不应是有效的 TaskStatus 值", () => {
+      const invalidStatus = 'done'
+      const validStatuses: TaskStatus[] = ['pending', 'in_progress', 'completed', 'failed', 'review']
+      expect(validStatuses.includes(invalidStatus as TaskStatus)).toBe(false)
+    })
   })
 
   describe('PMResult', () => {

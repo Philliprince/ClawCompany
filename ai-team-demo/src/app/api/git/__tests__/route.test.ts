@@ -35,11 +35,27 @@ jest.mock('@/lib/security/utils', () => ({
 import { POST, GET, PUT } from '../route'
 import { RateLimiter } from '@/lib/security/utils'
 
+const API_KEY = 'test-api-key-12345678901234567890'
+
+function createMockRequest(options?: any): any {
+  const url = options?.url || 'http://localhost/api/git'
+  const headers: Record<string, string> = {
+    'x-forwarded-for': '1.2.3.4',
+    ...(options?.noAuth ? {} : { 'x-api-key': API_KEY }),
+    ...(options?.headers || {}),
+  }
+  return {
+    url,
+    headers: { get: (name: string) => headers[name] || null },
+    json: () => Promise.resolve(options?.body || {}),
+  }
+}
+
 describe('Authentication', () => {
   const originalApiKey = process.env.AGENT_API_KEY
 
   beforeAll(() => {
-    process.env.AGENT_API_KEY = 'test-api-key-12345678901234567890'
+    process.env.AGENT_API_KEY = API_KEY
   })
 
   afterAll(() => {
@@ -51,7 +67,7 @@ describe('Authentication', () => {
   })
 
   it('POST should return 401 without API key', async () => {
-    const request = createMockRequest({ body: { message: 'test' } })
+    const request = createMockRequest({ noAuth: true, body: { message: 'test' } })
     const response = await POST(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -59,7 +75,7 @@ describe('Authentication', () => {
   })
 
   it('GET should return 401 without API key', async () => {
-    const request = createMockRequest({ url: 'http://localhost/api/git' })
+    const request = createMockRequest({ noAuth: true, url: 'http://localhost/api/git' })
     const response = await GET(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -67,7 +83,7 @@ describe('Authentication', () => {
   })
 
   it('PUT should return 401 without API key', async () => {
-    const request = createMockRequest({ body: { action: 'create', branchName: 'test' } })
+    const request = createMockRequest({ noAuth: true, body: { action: 'create', branchName: 'test' } })
     const response = await PUT(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -75,18 +91,23 @@ describe('Authentication', () => {
   })
 })
 
-function createMockRequest(options?: any): any {
-  const url = options?.url || 'http://localhost/api/git'
-  return {
-    url,
-    headers: { get: () => '1.2.3.4' },
-    json: () => Promise.resolve(options?.body || {}),
-  }
-}
-
 const getMockGit = () => (global as any).__mockGitRouteManager__
 
 describe('/api/git', () => {
+  const originalApiKey = process.env.AGENT_API_KEY
+
+  beforeAll(() => {
+    process.env.AGENT_API_KEY = API_KEY
+  })
+
+  afterAll(() => {
+    if (originalApiKey) {
+      process.env.AGENT_API_KEY = originalApiKey
+    } else {
+      delete process.env.AGENT_API_KEY
+    }
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
     ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(true)

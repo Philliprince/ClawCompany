@@ -1,4 +1,3 @@
-// Mock Next.js server components
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (data: any, options?: any) => {
@@ -22,11 +21,10 @@ jest.mock('@/lib/llm/factory', () => {
 process.env.USE_MOCK_LLM = 'true'
 process.env.AGENT_API_KEY = 'test-api-key-12345678901234567890'
 
-// Helper to create mock request
 function createMockRequest(options?: any): any {
   const url = options?.url || 'http://localhost/api/agent'
   const headers = {
-    'x-api-key': process.env.AGENT_API_KEY,
+    'x-api-key': options?.noAuth ? undefined : process.env.AGENT_API_KEY,
     ...(options?.headers || {})
   }
   return {
@@ -39,7 +37,6 @@ function createMockRequest(options?: any): any {
   }
 }
 
-// Use global to store mock functions
 jest.mock('@/lib/storage/manager', () => {
   ;(global as any).__mockStorageManager__ = {
     createConversation: jest.fn(() => ({
@@ -51,7 +48,7 @@ jest.mock('@/lib/storage/manager', () => {
     })),
     loadConversation: jest.fn(),
     saveConversation: jest.fn(),
-    addMessageToConversation: jest.fn((conv, msg) => ({
+    addMessageToConversation: jest.fn((conv: any, msg: any) => ({
       ...conv,
       messages: [...conv.messages, msg]
     })),
@@ -67,6 +64,15 @@ jest.mock('@/lib/storage/manager', () => {
   }
   return {
     StorageManager: jest.fn().mockImplementation(() => (global as any).__mockStorageManager__)
+  }
+})
+
+jest.mock('@/lib/security/sandbox', () => {
+  ;(global as any).__mockSandboxedWriter__ = {
+    writeFile: jest.fn(),
+  }
+  return {
+    SandboxedFileWriter: jest.fn().mockImplementation(() => (global as any).__mockSandboxedWriter__)
   }
 })
 
@@ -121,7 +127,7 @@ import { RateLimiter, SecurityManager } from '@/lib/security/utils'
 import { getLLMProvider, setLLMProvider } from '@/lib/llm/factory'
 
 const getMockStorageManager = () => (global as any).__mockStorageManager__
-const getMockFsManager = () => (global as any).__mockFsManager__
+const getMockSandboxedWriter = () => (global as any).__mockSandboxedWriter__
 
 describe('Authentication', () => {
   it('POST should return 401 without API key', async () => {
@@ -155,14 +161,10 @@ describe('/api/agent', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     
-    // Reset rate limiter
     ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(true)
     ;(RateLimiter.getRemaining as jest.Mock).mockReturnValue(60)
-    
-    // Reset security manager
     ;(SecurityManager.getFromEnv as jest.Mock).mockReturnValue('test-api-key-12345678901234567890')
     
-    // Reset storage manager
     const storage = getMockStorageManager()
     storage.createConversation.mockReset()
     storage.loadConversation.mockReset()
@@ -173,7 +175,6 @@ describe('/api/agent', () => {
     storage.deleteAgent.mockReset()
     storage.listAgents.mockReset()
     
-    // Set default implementations
     storage.createConversation.mockImplementation(() => ({
       id: 'conv-123',
       title: 'Test',
@@ -197,6 +198,14 @@ describe('/api/agent', () => {
       updatedAt: new Date().toISOString()
     })
     storage.listAgents.mockResolvedValue([])
+
+    const writer = getMockSandboxedWriter()
+    writer.writeFile.mockReset()
+    writer.writeFile.mockResolvedValue({ success: true, path: 'output/test.tsx' })
+
+    const git = (global as any).__mockGitManager__
+    git.commit.mockReset()
+    git.commit.mockResolvedValue({ success: true, commitHash: 'abc123' })
   })
 
   describe('POST', () => {
@@ -301,11 +310,9 @@ describe('/api/agent', () => {
       const response = await POST(request as any)
       const data = await response.json()
 
-      // Should still work in mock mode
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
 
-      // Restore API key
       ;(SecurityManager.getFromEnv as jest.Mock).mockReturnValue('test-api-key-12345678901234567890')
     })
   })
@@ -558,8 +565,6 @@ describe('/api/agent', () => {
   describe('POST - dev-agent code blocks', () => {
     it('should parse code blocks and create files for dev-agent', async () => {
       const storage = getMockStorageManager()
-      const fs = getMockFsManager()
-      const git = (global as any).__mockGitManager__
 
       storage.loadAgent.mockResolvedValue(null)
 
@@ -579,7 +584,9 @@ describe('/api/agent', () => {
 
       const mockResponse = data.message as string
       if (mockResponse.includes('// file:')) {
-        expect(fs.createFile).toHaveBeenCalled()
+        const writer = getMockSandboxedWriter()
+        expect(writer.writeFile).toHaveBeenCalled()
+        const git = (global as any).__mockGitManager__
         expect(git.commit).toHaveBeenCalled()
       }
     })
@@ -661,14 +668,14 @@ describe('/api/agent', () => {
       expect(data.success).toBe(true)
       expect(data.message).toBe('LLM generated response')
 
-      setLLMProvider(null)
+      setLLMProvider(null as any)
       process.env.USE_MOCK_LLM = originalMock
     })
 
     it('should fallback to mock when LLM provider returns null', async () => {
       const originalMock = process.env.USE_MOCK_LLM
       delete process.env.USE_MOCK_LLM
-      setLLMProvider(null)
+      setLLMProvider(null as any)
 
       const request = createMockRequest({
         method: 'POST',
@@ -712,12 +719,12 @@ describe('/api/agent', () => {
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
 
-      const fs = getMockFsManager()
+      const writer = getMockSandboxedWriter()
       const git = (global as any).__mockGitManager__
-      expect(fs.createFile).toHaveBeenCalledWith('src/components/Test.tsx', expect.any(String))
+      expect(writer.writeFile).toHaveBeenCalled()
       expect(git.commit).toHaveBeenCalled()
 
-      setLLMProvider(null)
+      setLLMProvider(null as any)
       process.env.USE_MOCK_LLM = originalMock
     })
 
@@ -744,10 +751,10 @@ describe('/api/agent', () => {
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
 
-      const fs = getMockFsManager()
-      expect(fs.createFile).not.toHaveBeenCalled()
+      const writer = getMockSandboxedWriter()
+      expect(writer.writeFile).not.toHaveBeenCalled()
 
-      setLLMProvider(null)
+      setLLMProvider(null as any)
       process.env.USE_MOCK_LLM = originalMock
     })
   })
@@ -780,7 +787,7 @@ describe('/api/agent', () => {
       const request = {
         url: 'http://localhost/api/agent',
         method: 'POST',
-        headers: { get: () => null },
+        headers: { get: (name: string) => name === 'x-api-key' ? process.env.AGENT_API_KEY : null },
         json: async () => { throw new SyntaxError('Unexpected token') }
       }
 
