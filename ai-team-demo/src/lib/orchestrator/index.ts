@@ -7,13 +7,11 @@ import { fileSystemManager } from '../filesystem/manager'
 import { resolveTaskOrder, DependencyError } from '../utils/task-resolver'
 import { resolveTitleDependencies } from '../utils/resolve-title-deps'
 import { OrchestratorError, FileSystemError } from '../core/errors'
-import { createLogger } from '../core/logger'
 
 export type { WorkflowError, FailedTask, WorkflowStats, WorkflowResult } from '../core/types'
 
 export class Orchestrator extends BaseOrchestrator {
   private projectId: string
-  private readonly log = createLogger('orchestrator')
 
   constructor(projectId: string = 'default', retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig) {
     super(retryConfig, observability)
@@ -120,7 +118,7 @@ export class Orchestrator extends BaseOrchestrator {
         sortedTasks = resolveTaskOrder(resolvedSubTasks)
       } catch (depError) {
         if (depError instanceof DependencyError) {
-          this.log.error('Dependency resolution failed', { error: depError.message })
+          this.logError('Dependency resolution failed', { error: depError.message })
           this.obs.errors.track(new OrchestratorError(depError.message))
           this.logError('Workflow completed', { success: false, reason: 'Dependency resolution failed' })
           this.getEventBus().emit({
@@ -153,7 +151,7 @@ export class Orchestrator extends BaseOrchestrator {
           (dep) => subTaskIds.includes(dep) && !completedTaskIds.has(dep),
         )
         if (unresolvedDep) {
-          this.log.warn('Skipping task: dependency not completed', { taskId: task.id, dependency: unresolvedDep })
+          this.logWarn('Skipping task: dependency not completed', { taskId: task.id, dependency: unresolvedDep })
           this.logWarn('Task skipped due to unmet dependency', { taskId: task.id, dependency: unresolvedDep })
           this.obs.perf.increment('orchestrator.tasks.failed')
           this.getEventBus().emit({
@@ -197,10 +195,8 @@ export class Orchestrator extends BaseOrchestrator {
                 try {
                   await cb.saveFile?.(file.path, file.content)
                   console.log(`Saved file: ${file.path}`)
-                  this.log.info('File saved', { path: file.path })
                   this.logInfo('File saved', { path: file.path })
                 } catch (error) {
-                  this.log.error('Failed to save file', { path: file.path, error: error instanceof Error ? error.message : String(error) })
                   this.logError('File save failed', { path: file.path, error: error instanceof Error ? error.message : String(error) })
                   const fsErr = error instanceof Error
                     ? new FileSystemError(error.message, file.path)
@@ -252,7 +248,7 @@ export class Orchestrator extends BaseOrchestrator {
             }
           }
         } catch (error) {
-          this.log.error('Unexpected error in task', { taskId: task.id, error: error instanceof Error ? error.message : 'Unknown error' })
+          this.logError('Unexpected error in task', { taskId: task.id, error: error instanceof Error ? error.message : 'Unknown error' })
           this.recordFailedTask(task, error instanceof Error ? error.message : 'Unknown error')
           this.obs.perf.increment('orchestrator.tasks.failed')
           this.obs.errors.track(error instanceof Error ? error : new Error(String(error)))
@@ -287,7 +283,7 @@ export class Orchestrator extends BaseOrchestrator {
         stats: this.buildWorkflowStats(subTaskIds.length, cb, completedTaskIds.size),
       }
     } catch (error) {
-      this.log.error('Fatal error in executeUserRequest', { error: error instanceof Error ? error.message : 'Unknown error' })
+      this.logError('Fatal error in executeUserRequest', { error: error instanceof Error ? error.message : 'Unknown error' })
       this.obs.errors.track(error instanceof Error ? error : new Error(String(error)))
       this.logError('Fatal error in workflow', { error: error instanceof Error ? error.message : 'Unknown error' })
       this.getEventBus().emit({

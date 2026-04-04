@@ -75,7 +75,11 @@ describe('Logger', () => {
       const l = new Logger({ minLevel: LogLevel.DEBUG, transports: [testTransport] })
       const error = new Error('test error')
       l.error('something failed', { error })
-      expect(capturedLogs[0].context.error).toBe('test error')
+      expect(capturedLogs[0].context.error).toEqual({
+        name: 'Error',
+        message: 'test error',
+        stack: expect.any(String),
+      })
     })
   })
 

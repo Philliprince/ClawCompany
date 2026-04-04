@@ -15,7 +15,7 @@ import { GameEvent } from "@/game/types/GameEvents";
 import { MetricsAggregator } from "@/lib/core/metrics-aggregator";
 import { PerformanceMonitor } from "@/lib/core/performance-monitor";
 import { ErrorTracker } from "@/lib/core/error-tracker";
-import { StructuredLogger } from "@/lib/core/structured-logger";
+import { Logger } from "@/lib/core/logger";
 
 export default function DashboardPage() {
   const store = useMemo(() => new DashboardStore(), []);
@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const metricsAggregator = useMemo(() => {
     const perfMonitor = new PerformanceMonitor();
     const errorTracker = new ErrorTracker();
-    const logger = new StructuredLogger();
+    const logger = new Logger();
     return new MetricsAggregator(perfMonitor, errorTracker, logger);
   }, []);
 

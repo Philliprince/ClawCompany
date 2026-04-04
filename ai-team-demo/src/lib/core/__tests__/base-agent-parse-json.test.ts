@@ -1,5 +1,6 @@
-import { BaseAgent, ParseResult } from '../base-agent'
 import { z } from 'zod'
+
+import { BaseAgent, ParseResult } from '../base-agent'
 
 const TestSchema = z.object({
   name: z.string().min(1),

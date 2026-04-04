@@ -75,7 +75,7 @@ export class FileSystemManager {
       await fs.mkdir(dirPath, { recursive: true })
     } catch (error) {
       // 如果目录已存在，忽略错误
-      if ((error as any).code !== 'EEXIST') {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
         throw error
       }
     }
@@ -152,7 +152,7 @@ export class FileSystemManager {
         content
       }
     } catch (error) {
-      if ((error as any).code === 'ENOENT') {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return {
           success: false,
           error: 'File not found'
@@ -165,13 +165,6 @@ export class FileSystemManager {
     }
   }
 
-  /**
-   * 更新文件
-   * 
-   * @param filePath - 相对文件路径
-   * @param content - 新的文件内容
-   * @returns 操作结果
-   */
   async updateFile(filePath: string, content: string): Promise<FileResult> {
     // 1. 验证路径
     const validation = this.validatePath(filePath)
@@ -231,7 +224,7 @@ export class FileSystemManager {
         path: fullPath
       }
     } catch (error) {
-      if ((error as any).code === 'ENOENT') {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return {
           success: false,
           error: 'File not found'

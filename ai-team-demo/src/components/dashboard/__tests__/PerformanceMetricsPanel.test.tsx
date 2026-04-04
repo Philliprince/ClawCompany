@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
+
 import { PerformanceMetricsPanel } from '../PerformanceMetricsPanel'
+
 import { MetricsAggregator } from '@/lib/core/metrics-aggregator'
 
 // Mock MetricsAggregator

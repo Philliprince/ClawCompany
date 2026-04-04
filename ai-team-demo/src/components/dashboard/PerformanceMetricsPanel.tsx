@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+
 import { MetricsAggregator, PerformanceMetrics } from '@/lib/core/metrics-aggregator';
 
 interface PerformanceMetricsPanelProps {
