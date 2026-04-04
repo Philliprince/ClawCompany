@@ -6,6 +6,12 @@ describe('SecurityManager', () => {
 
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = 'test-encryption-key'
+    process.env.ENCRYPTION_SALT = 'test-salt-for-testing'
+  })
+
+  afterEach(() => {
+    delete process.env.ENCRYPTION_KEY
+    delete process.env.ENCRYPTION_SALT
   })
 
   describe('Encryption Key Security', () => {
