@@ -223,7 +223,7 @@ export async function processItems(items: string[]) {
     })
 
     describe('测试覆盖检查', () => {
-      it('测试覆盖应该始终被标记为建议', async () => {
+      it('没有测试代码时应标记为建议', async () => {
         mockContext.files = {
           'src/components/Good.tsx': `
 import { useState, FormEvent } from 'react';
@@ -235,6 +235,19 @@ export default function Good() {
         const response = await reviewAgent.execute(mockTask, mockContext)
 
         expect(response.message).toContain('测试覆盖')
+      })
+
+      it('有测试代码时测试覆盖检查应通过', async () => {
+        mockContext.files = {
+          'src/components/Good.test.tsx': `import { render } from '@testing-library/react';
+describe('Good', () => {
+  it('renders', () => { expect(true).toBe(true); });
+});`
+        }
+
+        const response = await reviewAgent.execute(mockTask, mockContext)
+
+        expect(response.message).toMatch(/✅.*测试覆盖/)
       })
     })
 

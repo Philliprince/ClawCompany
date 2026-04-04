@@ -329,23 +329,58 @@ describe('ReviewAgent - Comprehensive', () => {
   })
 
   describe('checkTestCoverage', () => {
-    it('should always flag test coverage as a warning', async () => {
+    it('should warn when code has no test patterns', async () => {
       mockContext.files = {
-        'test.ts': 'const x = 1;',
+        'src/utils.ts': 'export function add(a: number, b: number) { return a + b; }',
       }
       const response = await reviewAgent.execute(mockTask, mockContext)
-      expect(response.message).toContain('测试覆盖')
+      expect(response.message).toMatch(/⚠️.*测试覆盖/)
     })
 
-    it('should flag test coverage even for perfect code', async () => {
+    it('should pass when code contains describe/it/expect test patterns', async () => {
       mockContext.files = {
-        'test.tsx': `import { useState, FormEvent } from 'react';
-export default function Form() {
-  try { return <form aria-label="form"><button type="submit">OK</button></form>; } catch(e) { return null; }
-}`,
+        'src/utils.test.ts': `import { add } from './utils';
+describe('add', () => {
+  it('should add two numbers', () => {
+    expect(add(1, 2)).toBe(3);
+  });
+});`,
       }
       const response = await reviewAgent.execute(mockTask, mockContext)
-      expect(response.message).toContain('测试覆盖')
+      expect(response.message).toMatch(/✅.*测试覆盖/)
+    })
+
+    it('should pass when code contains jest.fn or vitest patterns', async () => {
+      mockContext.files = {
+        'src/mock.ts': `const mockFn = jest.fn(() => 42);
+test('mock works', () => { expect(mockFn()).toBe(42); });`,
+      }
+      const response = await reviewAgent.execute(mockTask, mockContext)
+      expect(response.message).toMatch(/✅.*测试覆盖/)
+    })
+
+    it('should pass when file name contains .test. or .spec.', async () => {
+      mockContext.files = {
+        'src/component.spec.tsx': `import { render } from '@testing-library/react';
+import Component from './Component';
+it('renders', () => { render(<Component />); });`,
+      }
+      const response = await reviewAgent.execute(mockTask, mockContext)
+      expect(response.message).toMatch(/✅.*测试覆盖/)
+    })
+
+    it('should warn when no files are present', async () => {
+      mockContext.files = {}
+      const response = await reviewAgent.execute(mockTask, mockContext)
+      expect(response.message).toMatch(/⚠️.*测试覆盖/)
+    })
+
+    it('should pass when code uses test() or it() blocks', async () => {
+      mockContext.files = {
+        'src/app.test.ts': `test('works', () => { expect(true).toBe(true); });`,
+      }
+      const response = await reviewAgent.execute(mockTask, mockContext)
+      expect(response.message).toMatch(/✅.*测试覆盖/)
     })
   })
 

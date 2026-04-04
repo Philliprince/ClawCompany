@@ -146,7 +146,7 @@ export class ReviewAgent extends BaseAgent {
     checks.push(this.checkAccessibility(code))
     checks.push(this.checkPerformance(code))
     checks.push(this.checkSecurity(code))
-    checks.push(this.checkTestCoverage(code))
+    checks.push(this.checkTestCoverage(code, context))
 
     return checks
   }
@@ -262,9 +262,33 @@ export class ReviewAgent extends BaseAgent {
     return { name: '安全性检查', passed: true }
   }
 
-  private checkTestCoverage(_code: string): {
+  private checkTestCoverage(code: string, context: AgentContext): {
     name: string; passed: boolean; warning?: boolean; message?: string
   } {
+    const testPatterns = [
+      /\bdescribe\s*\(/,
+      /\bit\s*\(/,
+      /\btest\s*\(/,
+      /\bexpect\s*\(/,
+      /\bjest\.fn/,
+      /\bjest\.mock/,
+      /\bvitest/,
+      /\bvi\.fn/,
+      /\bvi\.mock/,
+      /\bbeforeEach\s*\(/,
+      /\bafterEach\s*\(/,
+    ]
+
+    const hasTestContent = testPatterns.some(p => p.test(code))
+
+    const hasTestFile = Object.keys(context.files).some(
+      f => /\.test\.[jt]sx?$/.test(f) || /\.spec\.[jt]sx?$/.test(f)
+    )
+
+    if (hasTestContent || hasTestFile) {
+      return { name: '测试覆盖', passed: true }
+    }
+
     return {
       name: '测试覆盖',
       passed: false,
