@@ -364,6 +364,46 @@ export abstract class BaseOrchestrator {
           cb.updateTaskStatus(task.id, 'pending')
           this.logInfo('Task execution completed', { taskId: task.id, success: false, reason: 'Review not approved' })
         }
+      } else {
+        const role = task.assignedTo as AgentRole
+        this.logInfo('Task execution started', { taskId: task.id, role })
+        this.getEventBus().emit({
+          type: 'task:started',
+          agentRole: role,
+          taskId: task.id,
+        })
+
+        const response = await this.executeAgentWithRetry(role, task, cb)
+
+        if (!response) {
+          this.recordFailedTask(task, `${role} task failed after all retries`)
+          this.obs.perf.increment('orchestrator.tasks.failed')
+          this.logError('Task execution completed', { taskId: task.id, success: false, reason: `${role} task failed` })
+          this.getEventBus().emit({
+            type: 'task:failed',
+            agentRole: role,
+            taskId: task.id,
+            data: { reason: `${role} task failed after all retries` },
+          })
+          return
+        }
+
+        cb.broadcast(role, response.message)
+
+        if (response.status === 'success') {
+          cb.updateTaskStatus(task.id, 'done')
+          completedTaskIds.add(task.id)
+          this.obs.perf.increment('orchestrator.tasks.completed')
+          this.logInfo('Task execution completed', { taskId: task.id, success: true })
+          this.getEventBus().emit({
+            type: 'task:completed',
+            agentRole: role,
+            taskId: task.id,
+          })
+        } else {
+          cb.updateTaskStatus(task.id, 'pending')
+          this.logInfo('Task execution completed', { taskId: task.id, success: false, reason: `${role} returned non-success` })
+        }
       }
     } catch (error) {
       this.logError('Unexpected error in task', { taskId: task.id, error: error instanceof Error ? error.message : 'Unknown error' })
