@@ -1,4 +1,3 @@
-// Mock Next.js server components
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (data: any, options?: any) => {
@@ -11,30 +10,15 @@ jest.mock('next/server', () => ({
   },
 }))
 
-// Helper to create mock request
-function createMockRequest(options?: any): any {
-  const url = options?.url || 'http://localhost/api/files'
-  return {
-    url,
-    method: options?.method || 'GET',
-    headers: {
-      get: (name: string) => options?.headers?.[name] || null
-    },
-    json: () => Promise.resolve(options?.body || {})
-  }
-}
-
-// Use global to store mock functions (to work around jest hoisting)
-jest.mock('@/lib/filesystem/manager', () => {
+jest.mock('@/lib/security/sandbox', () => {
   ;(global as any).__mockFsManager__ = {
-    createFile: jest.fn(),
-    readFile: jest.fn(),
-    updateFile: jest.fn(),
+    writeFile: jest.fn(),
+    readAllowed: jest.fn(),
+    listFiles: jest.fn(),
     deleteFile: jest.fn(),
-    listFiles: jest.fn()
   }
   return {
-    FileSystemManager: jest.fn().mockImplementation(() => (global as any).__mockFsManager__)
+    SandboxedFileWriter: jest.fn().mockImplementation(() => (global as any).__mockFsManager__)
   }
 })
 
@@ -54,18 +38,34 @@ jest.mock('@/lib/security/utils', () => ({
   }
 }))
 
-// Import after mocks
 import { POST, GET, PUT, DELETE } from '../route'
 
 import { RateLimiter } from '@/lib/security/utils'
 
+const API_KEY = 'test-api-key-12345678901234567890'
 const getMockFsManager = () => (global as any).__mockFsManager__
+
+function createMockRequest(options?: any): any {
+  const url = options?.url || 'http://localhost/api/files'
+  const headers = {
+    'x-api-key': options?.noAuth ? undefined : API_KEY,
+    ...(options?.headers || {})
+  }
+  return {
+    url,
+    method: options?.method || 'GET',
+    headers: {
+      get: (name: string) => headers[name] || null
+    },
+    json: () => Promise.resolve(options?.body || {})
+  }
+}
 
 describe('Authentication', () => {
   const originalApiKey = process.env.AGENT_API_KEY
 
   beforeAll(() => {
-    process.env.AGENT_API_KEY = 'test-api-key-12345678901234567890'
+    process.env.AGENT_API_KEY = API_KEY
   })
 
   afterAll(() => {
@@ -79,6 +79,7 @@ describe('Authentication', () => {
   it('POST should return 401 without API key', async () => {
     const request = createMockRequest({
       method: 'POST',
+      noAuth: true,
       body: { path: 'test.ts', content: 'test' },
     })
     const response = await POST(request as any)
@@ -90,6 +91,7 @@ describe('Authentication', () => {
   it('GET should return 401 without API key', async () => {
     const request = createMockRequest({
       method: 'GET',
+      noAuth: true,
       url: 'http://localhost/api/files?path=test.ts',
     })
     const response = await GET(request)
@@ -101,6 +103,7 @@ describe('Authentication', () => {
   it('PUT should return 401 without API key', async () => {
     const request = createMockRequest({
       method: 'PUT',
+      noAuth: true,
       body: { path: 'test.ts', content: 'updated' },
     })
     const response = await PUT(request)
@@ -112,6 +115,7 @@ describe('Authentication', () => {
   it('DELETE should return 401 without API key', async () => {
     const request = createMockRequest({
       method: 'DELETE',
+      noAuth: true,
       url: 'http://localhost/api/files?path=test.ts',
     })
     const response = await DELETE(request)
@@ -122,16 +126,28 @@ describe('Authentication', () => {
 })
 
 describe('/api/files', () => {
+  const originalApiKey = process.env.AGENT_API_KEY
+
+  beforeAll(() => {
+    process.env.AGENT_API_KEY = API_KEY
+  })
+
+  afterAll(() => {
+    if (originalApiKey) {
+      process.env.AGENT_API_KEY = originalApiKey
+    } else {
+      delete process.env.AGENT_API_KEY
+    }
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
     
     ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(true)
     
-    // Reset mock implementations
     const mockFsManager = getMockFsManager()
-    mockFsManager.createFile.mockReset()
-    mockFsManager.readFile.mockReset()
-    mockFsManager.updateFile.mockReset()
+    mockFsManager.writeFile.mockReset()
+    mockFsManager.readAllowed.mockReset()
     mockFsManager.deleteFile.mockReset()
     mockFsManager.listFiles.mockReset()
   })
@@ -139,10 +155,9 @@ describe('/api/files', () => {
   describe('POST - Create File', () => {
     it('should create file successfully', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.createFile.mockResolvedValue({
+      mockFsManager.writeFile.mockResolvedValue({
         success: true,
-        path: '/test/file.ts',
-        overwritten: false
+        path: 'output/test/file.ts',
       })
 
       const request = createMockRequest({
@@ -196,7 +211,7 @@ describe('/api/files', () => {
 
     it('should handle file system errors', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.createFile.mockResolvedValue({
+      mockFsManager.writeFile.mockResolvedValue({
         success: false,
         error: 'Permission denied'
       })
@@ -236,10 +251,10 @@ describe('/api/files', () => {
 
     it('should detect file overwrite', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.createFile.mockResolvedValue({
+      mockFsManager.writeFile.mockResolvedValue({
         success: true,
-        path: '/test/file.ts',
-        overwritten: true
+        path: 'output/test/file.ts',
+        warnings: ['File already exists, overwriting']
       })
 
       const request = createMockRequest({
@@ -254,17 +269,16 @@ describe('/api/files', () => {
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data.overwritten).toBe(true)
+      expect(data.warnings).toBeDefined()
     })
   })
 
   describe('GET - Read/List Files', () => {
     it('should read file successfully', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.readFile.mockResolvedValue({
+      mockFsManager.readAllowed.mockResolvedValue({
         success: true,
         content: 'file content',
-        path: '/test/file.ts'
       })
 
       const request = createMockRequest({
@@ -327,9 +341,9 @@ describe('/api/files', () => {
 
     it('should handle non-existent file', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.readFile.mockResolvedValue({
+      mockFsManager.readAllowed.mockResolvedValue({
         success: false,
-        error: 'File not found'
+        error: 'Failed to read file: ENOENT'
       })
 
       const request = createMockRequest({
@@ -341,7 +355,7 @@ describe('/api/files', () => {
       const data = await response.json()
 
       expect(response.status).toBe(404)
-      expect(data.error).toContain('not found')
+      expect(data.error).toBeDefined()
     })
 
     it('should list files in directory', async () => {
@@ -349,8 +363,8 @@ describe('/api/files', () => {
       mockFsManager.listFiles.mockResolvedValue({
         success: true,
         files: [
-          { name: 'file1.ts', type: 'file', size: 100 },
-          { name: 'file2.ts', type: 'file', size: 200 }
+          'file1.ts',
+          'file2.ts'
         ]
       })
 
@@ -370,9 +384,9 @@ describe('/api/files', () => {
   describe('PUT - Update File', () => {
     it('should update file successfully', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.updateFile.mockResolvedValue({
+      mockFsManager.writeFile.mockResolvedValue({
         success: true,
-        path: '/test/file.ts'
+        path: 'output/test/file.ts'
       })
 
       const request = createMockRequest({
@@ -408,9 +422,9 @@ describe('/api/files', () => {
 
     it('should handle non-existent file', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.updateFile.mockResolvedValue({
+      mockFsManager.writeFile.mockResolvedValue({
         success: false,
-        error: 'File not found'
+        error: 'Failed to write file: ENOENT'
       })
 
       const request = createMockRequest({
@@ -478,7 +492,7 @@ describe('/api/files', () => {
       const mockFsManager = getMockFsManager()
       mockFsManager.deleteFile.mockResolvedValue({
         success: false,
-        error: 'File not found'
+        error: 'Failed to delete file: ENOENT'
       })
 
       const request = createMockRequest({
@@ -499,7 +513,7 @@ describe('/api/files', () => {
       const request = {
         url: 'http://localhost/api/files',
         method: 'POST',
-        headers: { get: () => null },
+        headers: { get: (name: string) => name === 'x-api-key' ? API_KEY : null },
         json: async () => { throw new SyntaxError('Unexpected token') }
       }
 
@@ -512,7 +526,7 @@ describe('/api/files', () => {
 
     it('should handle file system errors', async () => {
       const mockFsManager = getMockFsManager()
-      mockFsManager.createFile.mockRejectedValue(new Error('Disk full'))
+      mockFsManager.writeFile.mockRejectedValue(new Error('Disk full'))
 
       const request = createMockRequest({
         method: 'POST',

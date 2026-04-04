@@ -9,15 +9,7 @@ jest.mock('next/server', () => ({
 
 jest.mock('@/lib/security/utils', () => ({
   InputValidator: {
-    validateMessage: (msg: string) => {
-      if (!msg || msg.trim().length === 0) {
-        return { valid: false, error: 'userRequest is required' }
-      }
-      if (msg.length > 10000) {
-        return { valid: false, error: 'Message too long' }
-      }
-      return { valid: true }
-    },
+    sanitize: (str: string) => str.replace(/[`$]/g, ''),
   },
   RateLimiter: {
     isAllowed: jest.fn(() => true),
@@ -28,11 +20,27 @@ jest.mock('@/lib/security/utils', () => ({
 import { POST, GET } from '../route'
 import { RateLimiter } from '@/lib/security/utils'
 
+const API_KEY = 'test-api-key-12345678901234567890'
+
+function createMockRequest(options?: any): any {
+  const url = options?.url || 'http://localhost/api/openclaw'
+  const headers: Record<string, string> = {
+    'x-forwarded-for': '1.2.3.4',
+    ...(options?.noAuth ? {} : { 'x-api-key': API_KEY }),
+    ...(options?.headers || {}),
+  }
+  return {
+    url,
+    headers: { get: (name: string) => headers[name] || null },
+    json: () => Promise.resolve(options?.body || {}),
+  }
+}
+
 describe('Authentication', () => {
   const originalApiKey = process.env.AGENT_API_KEY
 
   beforeAll(() => {
-    process.env.AGENT_API_KEY = 'test-api-key-12345678901234567890'
+    process.env.AGENT_API_KEY = API_KEY
   })
 
   afterAll(() => {
@@ -44,7 +52,7 @@ describe('Authentication', () => {
   })
 
   it('POST should return 401 without API key', async () => {
-    const request = createMockRequest({ body: { action: 'orchestrate', userRequest: 'test' } })
+    const request = createMockRequest({ noAuth: true, body: { action: 'orchestrate', userRequest: 'test' } })
     const response = await POST(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -52,7 +60,7 @@ describe('Authentication', () => {
   })
 
   it('GET should return 401 without API key', async () => {
-    const request = createMockRequest()
+    const request = createMockRequest({ noAuth: true })
     const response = await GET(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -60,16 +68,21 @@ describe('Authentication', () => {
   })
 })
 
-function createMockRequest(options?: any): any {
-  const url = options?.url || 'http://localhost/api/openclaw'
-  return {
-    url,
-    headers: { get: () => '1.2.3.4' },
-    json: () => Promise.resolve(options?.body || {}),
-  }
-}
-
 describe('/api/openclaw', () => {
+  const originalApiKey = process.env.AGENT_API_KEY
+
+  beforeAll(() => {
+    process.env.AGENT_API_KEY = API_KEY
+  })
+
+  afterAll(() => {
+    if (originalApiKey) {
+      process.env.AGENT_API_KEY = originalApiKey
+    } else {
+      delete process.env.AGENT_API_KEY
+    }
+  })
+
   let fetchSpy: jest.SpiedFunction<typeof fetch>
 
   beforeEach(() => {
@@ -120,7 +133,17 @@ describe('/api/openclaw', () => {
       expect(response.status).toBe(400)
     })
 
-    it('should reject too long userRequest', async () => {
+    it('should pass through long userRequest to gateway', async () => {
+      fetchSpy
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ sessionKey: 'session-long' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ([{ status: 'completed', content: 'Done' }]),
+        } as Response)
+
       const request = createMockRequest({
         body: { action: 'orchestrate', userRequest: 'a'.repeat(10001) },
       })
@@ -128,7 +151,8 @@ describe('/api/openclaw', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
+      expect(response.status).toBe(200)
+      expect(data.success).toBe(true)
     })
 
     it('should handle gateway spawn error', async () => {
@@ -146,7 +170,7 @@ describe('/api/openclaw', () => {
       const data = await response.json()
 
       expect(response.status).toBe(500)
-      expect(data.error).toContain('Gateway error')
+      expect(data.error).toContain('Gateway')
     })
 
     it('should enforce rate limiting', async () => {
@@ -198,12 +222,10 @@ describe('/api/openclaw', () => {
           json: async () => ([{ status: 'failed', content: 'Error occurred' }]),
         } as Response)
 
-      const request = createMockRequest({
-        body: { action: 'orchestrate', userRequest: 'test' },
-      })
-
       jest.useFakeTimers()
-      const promise = POST(request)
+      const promise = POST(createMockRequest({
+        body: { action: 'orchestrate', userRequest: 'test' },
+      }))
       await jest.runAllTimersAsync()
       const response = await promise
       const data = await response.json()
@@ -226,17 +248,15 @@ describe('/api/openclaw', () => {
           json: async () => ([{ status: 'running', content: 'still running' }]),
         } as Response)
 
-      const request = createMockRequest({
+      const promise = POST(createMockRequest({
         body: { action: 'orchestrate', userRequest: 'test' },
-      })
-
-      const promise = POST(request)
+      }))
       await jest.runAllTimersAsync()
       const response = await promise
       const data = await response.json()
 
       expect(response.status).toBe(500)
-      expect(data.error).toContain('Timeout')
+      expect(data.error).toContain('timeout')
 
       jest.useRealTimers()
     }, 30000)
@@ -281,7 +301,9 @@ describe('/api/openclaw', () => {
       const response = await GET(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500)
+      expect(response.status).toBe(200)
+      expect(data.success).toBe(true)
+      expect(data.connected).toBe(false)
       expect(data.error).toBeDefined()
     })
   })

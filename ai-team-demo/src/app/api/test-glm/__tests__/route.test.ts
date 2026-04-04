@@ -23,12 +23,24 @@ jest.mock('@/lib/security/utils', () => ({
 import { POST } from '../route'
 import { RateLimiter } from '@/lib/security/utils'
 
+const API_KEY = 'test-api-key-12345678901234567890'
+
+function createMockRequest(options?: { noAuth?: boolean }): any {
+  const headers: Record<string, string> = {
+    'x-forwarded-for': '1.2.3.4',
+    ...(options?.noAuth ? {} : { 'x-api-key': API_KEY }),
+  }
+  return {
+    headers: { get: (name: string) => headers[name] || null },
+  }
+}
+
 describe('Authentication', () => {
   const originalApiKey = process.env.AGENT_API_KEY
   let originalNodeEnv: string | undefined
 
   beforeAll(() => {
-    process.env.AGENT_API_KEY = 'test-api-key-12345678901234567890'
+    process.env.AGENT_API_KEY = API_KEY
     originalNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'test'
   })
@@ -43,43 +55,44 @@ describe('Authentication', () => {
   })
 
   it('POST should return 401 without API key', async () => {
-    const response = await POST(createMockRequest())
+    const response = await POST(createMockRequest({ noAuth: true }))
     const data = await response.json()
     expect(response.status).toBe(401)
     expect(data.error).toContain('Unauthorized')
   })
 })
 
-function createMockRequest(): any {
-  return {
-    headers: { get: () => '1.2.3.4' },
-  }
-}
-
 describe('/api/test-glm', () => {
+  const originalApiKey = process.env.AGENT_API_KEY
   let originalNodeEnv: string | undefined
 
   beforeAll(() => {
     originalNodeEnv = process.env.NODE_ENV
+    process.env.AGENT_API_KEY = API_KEY
   })
 
   afterAll(() => {
     process.env.NODE_ENV = originalNodeEnv
+    if (originalApiKey) {
+      process.env.AGENT_API_KEY = originalApiKey
+    } else {
+      delete process.env.AGENT_API_KEY
+    }
   })
 
   beforeEach(() => {
     jest.clearAllMocks()
-    process.env.NODE_ENV = 'test'
+    ;(process as any).env.NODE_ENV = 'test'
     ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(true)
     ;(RateLimiter.getRemaining as jest.Mock).mockReturnValue(60)
   })
 
   afterEach(() => {
-    process.env.NODE_ENV = 'test'
+    ;(process as any).env.NODE_ENV = 'test'
   })
 
   it('should return error in production', async () => {
-    process.env.NODE_ENV = 'production'
+    ;(process as any).env.NODE_ENV = 'production'
 
     const response = await POST(createMockRequest())
     const data = await response.json()
@@ -87,7 +100,7 @@ describe('/api/test-glm', () => {
     expect(response.status).toBe(403)
     expect(data.error).toContain('not available in production')
 
-    process.env.NODE_ENV = 'test'
+    ;(process as any).env.NODE_ENV = 'test'
   })
 
   it('should return error when GLM_API_KEY not configured', async () => {

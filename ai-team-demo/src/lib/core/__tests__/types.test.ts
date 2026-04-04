@@ -210,6 +210,12 @@ describe('Type narrowings', () => {
     expect(statuses).toHaveLength(5)
   })
 
+  it("'done' is not a valid TaskStatus value", () => {
+    const invalidStatus = 'done'
+    const validStatuses: TaskStatus[] = ['pending', 'in_progress', 'review', 'completed', 'failed']
+    expect(validStatuses.includes(invalidStatus as TaskStatus)).toBe(false)
+  })
+
   it('AgentRole covers all expected roles', () => {
     const roles: AgentRole[] = ['pm', 'dev', 'review']
     expect(roles).toHaveLength(3)

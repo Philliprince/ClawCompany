@@ -1,6 +1,3 @@
-// Chat API 完整测试
-
-// Mock Next.js server components
 jest.mock('next/server', () => ({
   NextRequest: class MockNextRequest {
     json: () => Promise<any>
@@ -47,8 +44,8 @@ jest.mock('@/lib/orchestrator', () => ({
         { agent: 'review', content: '代码审查报告 - 审查通过', timestamp: new Date().toISOString() },
       ],
       tasks: [
-        { id: 'task-1', title: '创建表单组件', status: 'done', assignedTo: 'dev' },
-        { id: 'task-2', title: '添加表单验证', status: 'done', assignedTo: 'dev' },
+        { id: 'task-1', title: '创建表单组件', status: 'completed', assignedTo: 'dev' },
+        { id: 'task-2', title: '添加表单验证', status: 'completed', assignedTo: 'dev' },
       ],
       files: [],
       stats: {
@@ -63,7 +60,7 @@ jest.mock('@/lib/orchestrator', () => ({
       projectId: 'default',
       tasks: [],
       messages: [],
-      stats: { total: 0, pending: 0, in_progress: 0, review: 0, done: 0 },
+      stats: { total: 0, pending: 0, in_progress: 0, review: 0, completed: 0 },
     })),
     reset: jest.fn(),
   },
@@ -71,11 +68,16 @@ jest.mock('@/lib/orchestrator', () => ({
 
 import { POST, GET } from '../route'
 
-function createMockRequest(body: any): any {
+const API_KEY = 'test-api-key-12345678901234567890'
+
+function createMockRequest(body: any, options?: { noAuth?: boolean }): any {
+  const headers: Record<string, string> = {
+    ...(options?.noAuth ? {} : { 'x-api-key': API_KEY }),
+  }
   return {
     json: async () => body,
     headers: {
-      get: (name: string) => null,
+      get: (name: string) => headers[name] || null,
     },
   } as any
 }
@@ -84,7 +86,7 @@ describe('Authentication', () => {
   const originalApiKey = process.env.AGENT_API_KEY
 
   beforeAll(() => {
-    process.env.AGENT_API_KEY = 'test-api-key-12345678901234567890'
+    process.env.AGENT_API_KEY = API_KEY
   })
 
   afterAll(() => {
@@ -96,7 +98,7 @@ describe('Authentication', () => {
   })
 
   it('POST should return 401 without API key', async () => {
-    const request = createMockRequest({ message: 'test' })
+    const request = createMockRequest({ message: 'test' }, { noAuth: true })
     const response = await POST(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -104,7 +106,7 @@ describe('Authentication', () => {
   })
 
   it('GET should return 401 without API key', async () => {
-    const request = createMockRequest({})
+    const request = createMockRequest({}, { noAuth: true })
     const response = await GET(request)
     const data = await response.json()
     expect(response.status).toBe(401)
@@ -123,6 +125,20 @@ describe('Authentication', () => {
 })
 
 describe('Chat API', () => {
+  const originalApiKey = process.env.AGENT_API_KEY
+
+  beforeAll(() => {
+    process.env.AGENT_API_KEY = API_KEY
+  })
+
+  afterAll(() => {
+    if (originalApiKey) {
+      process.env.AGENT_API_KEY = originalApiKey
+    } else {
+      delete process.env.AGENT_API_KEY
+    }
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
   })
