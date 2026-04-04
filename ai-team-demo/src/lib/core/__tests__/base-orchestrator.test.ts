@@ -492,4 +492,495 @@ describe('BaseOrchestrator - executeSingleTask', () => {
     expect(completedEvents.length).toBe(1)
     expect(completedEvents[0].agentRole).toBe('review')
   })
+
+  it('should skip task when dependency is not completed', async () => {
+    const task: Task = {
+      id: 'task-2',
+      title: 'Feature',
+      description: 'Build feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: ['task-1'],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks()
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      task,
+      callbacks,
+      ['task-1', 'task-2'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(callbacks.executeAgent).not.toHaveBeenCalled()
+    expect(completedTaskIds.has('task-2')).toBe(false)
+    const events = orchestrator.getEventBus().getHistory()
+    const skippedEvents = events.filter(e => e.type === 'task:skipped' && e.taskId === 'task-2')
+    expect(skippedEvents.length).toBe(1)
+    expect(skippedEvents[0].data).toEqual({ dependency: 'task-1', reason: 'Dependency not completed' })
+  })
+
+  it('should not skip task when dependency is outside subTaskIds', async () => {
+    const task: Task = {
+      id: 'task-2',
+      title: 'Feature',
+      description: 'Build feature',
+      status: 'pending',
+      assignedTo: 'pm',
+      dependencies: ['external-task'],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockResolvedValue({
+        agent: 'pm' as AgentRole,
+        message: 'done',
+        status: 'success' as const,
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      task,
+      callbacks,
+      ['task-2'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(callbacks.executeAgent).toHaveBeenCalled()
+  })
+
+  it('should execute dev task: dev agent + file saving + review agent', async () => {
+    const devTask: Task = {
+      id: 'dev-task-1',
+      title: 'Implement',
+      description: 'Implement feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const savedFiles: Array<{ path: string; content: string }> = []
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn()
+        .mockResolvedValueOnce({
+          agent: 'dev' as AgentRole,
+          message: 'Implemented',
+          status: 'success' as const,
+          files: [
+            { path: 'src/feature.ts', content: 'export const feature = 1', action: 'create' as const },
+          ],
+        })
+        .mockResolvedValueOnce({
+          agent: 'review' as AgentRole,
+          message: 'Approved',
+          status: 'success' as const,
+        }),
+      saveFile: jest.fn().mockImplementation(async (path: string, content: string) => {
+        savedFiles.push({ path, content })
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      devTask,
+      callbacks,
+      ['dev-task-1'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(callbacks.executeAgent).toHaveBeenCalledTimes(2)
+    expect(callbacks.broadcast).toHaveBeenCalledWith('dev', 'Implemented')
+    expect(callbacks.broadcast).toHaveBeenCalledWith('review', 'Approved')
+    expect(savedFiles).toEqual([{ path: 'src/feature.ts', content: 'export const feature = 1' }])
+    expect(allFiles).toEqual([{ path: 'src/feature.ts', content: 'export const feature = 1', action: 'create' }])
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('dev-task-1', 'in_progress')
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('dev-task-1', 'review')
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('dev-task-1', 'done')
+    expect(completedTaskIds.has('dev-task-1')).toBe(true)
+  })
+
+  it('should handle file save errors gracefully for dev task', async () => {
+    const devTask: Task = {
+      id: 'dev-task-2',
+      title: 'Implement',
+      description: 'Implement feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn()
+        .mockResolvedValueOnce({
+          agent: 'dev' as AgentRole,
+          message: 'Done',
+          status: 'success' as const,
+          files: [
+            { path: 'src/bad.ts', content: 'bad content', action: 'create' as const },
+          ],
+        })
+        .mockResolvedValueOnce({
+          agent: 'review' as AgentRole,
+          message: 'Approved',
+          status: 'success' as const,
+        }),
+      saveFile: jest.fn().mockRejectedValue(new Error('Disk full')),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      devTask,
+      callbacks,
+      ['dev-task-2'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(allFiles).toEqual([{ path: 'src/bad.ts', content: 'bad content', action: 'create' }])
+    expect(completedTaskIds.has('dev-task-2')).toBe(true)
+    const events = orchestrator.getEventBus().getHistory()
+    const errorEvents = events.filter(e => e.type === 'error:tracked' && e.data?.path === 'src/bad.ts')
+    expect(errorEvents.length).toBeGreaterThan(0)
+  })
+
+  it('should fail dev task when dev agent returns null', async () => {
+    const devTask: Task = {
+      id: 'dev-task-3',
+      title: 'Implement',
+      description: 'Implement feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockRejectedValue(new Error('Agent crashed')),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks, { maxRetries: 0, initialDelay: 1, maxDelay: 1, backoffMultiplier: 1 })
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      devTask,
+      callbacks,
+      ['dev-task-3'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(completedTaskIds.has('dev-task-3')).toBe(false)
+    expect(callbacks.updateTaskStatus).not.toHaveBeenCalledWith('dev-task-3', 'review')
+    const events = orchestrator.getEventBus().getHistory()
+    const failedEvents = events.filter(e => e.type === 'task:failed' && e.taskId === 'dev-task-3')
+    expect(failedEvents.length).toBe(1)
+    expect(failedEvents[0].agentRole).toBe('dev')
+  })
+
+  it('should fail dev task when review agent returns null', async () => {
+    const devTask: Task = {
+      id: 'dev-task-4',
+      title: 'Implement',
+      description: 'Implement feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    let callCount = 0
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockImplementation(async () => {
+        callCount++
+        if (callCount === 1) {
+          return { agent: 'dev' as AgentRole, message: 'Done', status: 'success' as const }
+        }
+        throw new Error('Review agent crashed')
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks, { maxRetries: 0, initialDelay: 1, maxDelay: 1, backoffMultiplier: 1 })
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      devTask,
+      callbacks,
+      ['dev-task-4'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(completedTaskIds.has('dev-task-4')).toBe(false)
+    const events = orchestrator.getEventBus().getHistory()
+    const failedEvents = events.filter(e => e.type === 'task:failed' && e.taskId === 'dev-task-4')
+    expect(failedEvents.length).toBe(1)
+    expect(failedEvents[0].agentRole).toBe('review')
+  })
+
+  it('should revert dev task to pending when review returns non-success', async () => {
+    const devTask: Task = {
+      id: 'dev-task-5',
+      title: 'Implement',
+      description: 'Implement feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn()
+        .mockResolvedValueOnce({
+          agent: 'dev' as AgentRole,
+          message: 'Done',
+          status: 'success' as const,
+        })
+        .mockResolvedValueOnce({
+          agent: 'review' as AgentRole,
+          message: 'Needs fixes',
+          status: 'error' as const,
+        }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      devTask,
+      callbacks,
+      ['dev-task-5'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(completedTaskIds.has('dev-task-5')).toBe(false)
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('dev-task-5', 'pending')
+  })
+
+  it('should handle unexpected errors in task execution', async () => {
+    const task: Task = {
+      id: 'task-err',
+      title: 'Risky task',
+      description: 'Might fail',
+      status: 'pending',
+      assignedTo: 'pm',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      updateTaskStatus: jest.fn().mockImplementation(() => {
+        throw new Error('Unexpected DB error')
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      task,
+      callbacks,
+      ['task-err'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(completedTaskIds.has('task-err')).toBe(false)
+    const events = orchestrator.getEventBus().getHistory()
+    const failedEvents = events.filter(e => e.type === 'task:failed' && e.taskId === 'task-err')
+    expect(failedEvents.length).toBe(1)
+    expect(failedEvents[0].data?.error).toBe('Unexpected DB error')
+  })
+
+  it('should revert non-dev task to pending when agent returns non-success', async () => {
+    const pmTask: Task = {
+      id: 'pm-task-2',
+      title: 'Analysis',
+      description: 'Analyze',
+      status: 'pending',
+      assignedTo: 'pm',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockResolvedValue({
+        agent: 'pm' as AgentRole,
+        message: 'Need more info',
+        status: 'need_input' as const,
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      pmTask,
+      callbacks,
+      ['pm-task-2'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    expect(completedTaskIds.has('pm-task-2')).toBe(false)
+    expect(callbacks.updateTaskStatus).toHaveBeenCalledWith('pm-task-2', 'pending')
+  })
+
+  it('should emit task:started event for dev task', async () => {
+    const devTask: Task = {
+      id: 'dev-task-6',
+      title: 'Implement',
+      description: 'Implement feature',
+      status: 'pending',
+      assignedTo: 'dev',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn()
+        .mockResolvedValueOnce({
+          agent: 'dev' as AgentRole,
+          message: 'Done',
+          status: 'success' as const,
+        })
+        .mockResolvedValueOnce({
+          agent: 'review' as AgentRole,
+          message: 'Approved',
+          status: 'success' as const,
+        }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      devTask,
+      callbacks,
+      ['dev-task-6'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    const events = orchestrator.getEventBus().getHistory()
+    const startedEvents = events.filter(e => e.type === 'task:started' && e.taskId === 'dev-task-6')
+    expect(startedEvents.length).toBe(2)
+    expect(startedEvents[0].agentRole).toBe('dev')
+    expect(startedEvents[1].agentRole).toBe('review')
+  })
+
+  it('should increment orchestrator.tasks.completed on success', async () => {
+    const task: Task = {
+      id: 'task-metrics',
+      title: 'Task',
+      description: 'desc',
+      status: 'pending',
+      assignedTo: 'review',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockResolvedValue({
+        agent: 'review' as AgentRole,
+        message: 'Done',
+        status: 'success' as const,
+      }),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks)
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      task,
+      callbacks,
+      ['task-metrics'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    const obs = orchestrator.getObservability()
+    expect(obs.performance.counters['orchestrator.tasks.completed']).toBe(1)
+  })
+
+  it('should increment orchestrator.tasks.failed on agent failure', async () => {
+    const task: Task = {
+      id: 'task-fail-metrics',
+      title: 'Task',
+      description: 'desc',
+      status: 'pending',
+      assignedTo: 'review',
+      dependencies: [],
+      files: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const callbacks = makeMockCallbacks({
+      executeAgent: jest.fn().mockRejectedValue(new Error('Boom')),
+    })
+
+    const orchestrator = new TestOrchestrator(callbacks, { maxRetries: 0, initialDelay: 1, maxDelay: 1, backoffMultiplier: 1 })
+    const completedTaskIds = new Set<string>()
+    const allFiles: FileChange[] = []
+
+    await orchestrator.exposeExecuteSingleTask(
+      task,
+      callbacks,
+      ['task-fail-metrics'],
+      completedTaskIds,
+      allFiles,
+    )
+
+    const obs = orchestrator.getObservability()
+    expect(obs.performance.counters['orchestrator.tasks.failed']).toBeGreaterThanOrEqual(1)
+  })
 })

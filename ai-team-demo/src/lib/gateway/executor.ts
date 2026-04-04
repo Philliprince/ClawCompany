@@ -1,4 +1,5 @@
 import { OpenClawGatewayClient, SpawnOptions, SpawnResult, getGatewayClient } from './client'
+import { sanitizeUserInput } from '../utils/prompt-sanitizer'
 
 export interface AgentSpawnConfig {
   runtime: 'subagent' | 'acp'
@@ -121,9 +122,10 @@ export class OpenClawAgentExecutor {
   }
 
   async executePMAgent(task: string): Promise<AgentExecutionResult> {
+    const sanitizedTask = sanitizeUserInput(task)
     const prompt = `You are a PM Claw. Analyze the following requirement and break it down into tasks.
 
-Requirement: ${task}
+${sanitizedTask}
 
 Please provide:
 1. Task breakdown (list of specific tasks)
@@ -148,10 +150,12 @@ Format your response as JSON:
   }
 
   async executeDevAgent(task: string, description?: string): Promise<AgentExecutionResult> {
+    const sanitizedTask = sanitizeUserInput(task)
+    const sanitizedDesc = description ? sanitizeUserInput(description) : ''
     const prompt = `You are a Dev Claw. Implement the following task.
 
-Task: ${task}
-${description ? `Description: ${description}` : ''}
+${sanitizedTask}
+${sanitizedDesc ? sanitizedDesc : ''}
 
 Please:
 1. Implement the required functionality
@@ -167,10 +171,12 @@ Provide the complete implementation.`
   }
 
   async executeReviewAgent(task: string, code?: string): Promise<AgentExecutionResult> {
+    const sanitizedTask = sanitizeUserInput(task)
+    const sanitizedCode = code ? sanitizeUserInput(code) : ''
     const prompt = `You are a Reviewer Claw. Review the following implementation.
 
-Task: ${task}
-${code ? `Code to review:\n\`\`\`\n${code}\n\`\`\`` : ''}
+${sanitizedTask}
+${sanitizedCode ? sanitizedCode : ''}
 
 Please check:
 1. Code quality

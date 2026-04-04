@@ -293,157 +293,183 @@ export abstract class BaseOrchestrator {
     completedTaskIds: Set<string>,
     allFiles: FileChange[],
   ): Promise<void> {
-    const unresolvedDep = task.dependencies.find(
-      (dep) => subTaskIds.includes(dep) && !completedTaskIds.has(dep),
-    )
-    if (unresolvedDep) {
-      this.logWarn('Skipping task: dependency not completed', { taskId: task.id, dependency: unresolvedDep })
-      this.recordFailedTask(task, `Dependency not completed: ${unresolvedDep}`)
-      this.obs.perf.increment('orchestrator.tasks.failed')
-      this.getEventBus().emit({
-        type: 'task:skipped',
-        taskId: task.id,
-        data: { dependency: unresolvedDep, reason: 'Dependency not completed' },
-      })
-      return
-    }
+    if (this.checkUnresolvedDependency(task, subTaskIds, completedTaskIds)) return
 
     try {
       cb.updateTaskStatus(task.id, 'in_progress')
 
       if (task.assignedTo === 'dev') {
-        this.logInfo('Task execution started', { taskId: task.id, role: 'dev' })
-        this.getEventBus().emit({
-          type: 'task:started',
-          agentRole: 'dev',
-          taskId: task.id,
-        })
-
-        const devResponse = await this.executeAgentWithRetry('dev', task, cb)
-
-        if (!devResponse) {
-          this.recordFailedTask(task, 'Dev task failed after all retries')
-          this.obs.perf.increment('orchestrator.tasks.failed')
-          this.logError('Task execution completed', { taskId: task.id, success: false, reason: 'Dev task failed' })
-          this.getEventBus().emit({
-            type: 'task:failed',
-            agentRole: 'dev',
-            taskId: task.id,
-            data: { reason: 'Dev task failed after all retries' },
-          })
-          return
-        }
-
-        cb.broadcast('dev', devResponse.message)
-
-        if (devResponse.files) {
-          for (const file of devResponse.files) {
-            try {
-              await cb.saveFile?.(file.path, file.content)
-              this.logInfo(`Saved file: ${file.path}`)
-            } catch (error) {
-              this.logError('File save failed', { path: file.path, error: error instanceof Error ? error.message : String(error) })
-              const fsErr = error instanceof Error
-                ? new FileSystemError(error.message, file.path)
-                : new FileSystemError(String(error), file.path)
-              this.obs.errors.track(fsErr)
-              this.getEventBus().emit({
-                type: 'error:tracked',
-                agentRole: 'dev',
-                taskId: task.id,
-                data: { level: 'error', message: 'File save failed', path: file.path, error: error instanceof Error ? error.message : String(error) },
-              })
-            }
-          }
-          allFiles.push(...devResponse.files)
-        }
-
-        cb.updateTaskStatus(task.id, 'review')
-
-        const reviewResponse = await this.executeAgentWithRetry('review', task, cb)
-
-        if (!reviewResponse) {
-          this.recordFailedTask(task, 'Review task failed after all retries')
-          this.obs.perf.increment('orchestrator.tasks.failed')
-          this.logError('Task execution completed', { taskId: task.id, success: false, reason: 'Review task failed' })
-          this.getEventBus().emit({
-            type: 'task:failed',
-            agentRole: 'review',
-            taskId: task.id,
-            data: { reason: 'Review task failed after all retries' },
-          })
-          return
-        }
-
-        cb.broadcast('review', reviewResponse.message)
-
-        if (reviewResponse.status === 'success') {
-          cb.updateTaskStatus(task.id, 'done')
-          completedTaskIds.add(task.id)
-          this.obs.perf.increment('orchestrator.tasks.completed')
-          this.logInfo('Task execution completed', { taskId: task.id, success: true })
-          this.getEventBus().emit({
-            type: 'task:completed',
-            agentRole: 'review',
-            taskId: task.id,
-          })
-        } else {
-          cb.updateTaskStatus(task.id, 'pending')
-          this.logInfo('Task execution completed', { taskId: task.id, success: false, reason: 'Review not approved' })
-        }
+        await this.executeDevWorkflow(task, cb, completedTaskIds, allFiles)
       } else {
-        const role = task.assignedTo as AgentRole
-        this.logInfo('Task execution started', { taskId: task.id, role })
-        this.getEventBus().emit({
-          type: 'task:started',
-          agentRole: role,
-          taskId: task.id,
-        })
-
-        const response = await this.executeAgentWithRetry(role, task, cb)
-
-        if (!response) {
-          this.recordFailedTask(task, `${role} task failed after all retries`)
-          this.obs.perf.increment('orchestrator.tasks.failed')
-          this.logError('Task execution completed', { taskId: task.id, success: false, reason: `${role} task failed` })
-          this.getEventBus().emit({
-            type: 'task:failed',
-            agentRole: role,
-            taskId: task.id,
-            data: { reason: `${role} task failed after all retries` },
-          })
-          return
-        }
-
-        cb.broadcast(role, response.message)
-
-        if (response.status === 'success') {
-          cb.updateTaskStatus(task.id, 'done')
-          completedTaskIds.add(task.id)
-          this.obs.perf.increment('orchestrator.tasks.completed')
-          this.logInfo('Task execution completed', { taskId: task.id, success: true })
-          this.getEventBus().emit({
-            type: 'task:completed',
-            agentRole: role,
-            taskId: task.id,
-          })
-        } else {
-          cb.updateTaskStatus(task.id, 'pending')
-          this.logInfo('Task execution completed', { taskId: task.id, success: false, reason: `${role} returned non-success` })
-        }
+        await this.executeAgentWorkflow(task, cb, task.assignedTo as AgentRole, completedTaskIds)
       }
     } catch (error) {
-      this.logError('Unexpected error in task', { taskId: task.id, error: error instanceof Error ? error.message : 'Unknown error' })
-      this.recordFailedTask(task, error instanceof Error ? error.message : 'Unknown error')
-      this.obs.perf.increment('orchestrator.tasks.failed')
-      this.obs.errors.track(error instanceof Error ? error : new Error(String(error)))
-      this.logError('Task execution completed', { taskId: task.id, success: false, error: error instanceof Error ? error.message : 'Unknown error' })
-      this.getEventBus().emit({
-        type: 'task:failed',
-        taskId: task.id,
-        data: { error: error instanceof Error ? error.message : 'Unknown error' },
-      })
+      this.handleTaskError(task, error)
     }
+  }
+
+  private checkUnresolvedDependency(
+    task: Task,
+    subTaskIds: string[],
+    completedTaskIds: Set<string>,
+  ): boolean {
+    const unresolvedDep = task.dependencies.find(
+      (dep) => subTaskIds.includes(dep) && !completedTaskIds.has(dep),
+    )
+    if (!unresolvedDep) return false
+
+    this.logWarn('Skipping task: dependency not completed', { taskId: task.id, dependency: unresolvedDep })
+    this.recordFailedTask(task, `Dependency not completed: ${unresolvedDep}`)
+    this.obs.perf.increment('orchestrator.tasks.failed')
+    this.getEventBus().emit({
+      type: 'task:skipped',
+      taskId: task.id,
+      data: { dependency: unresolvedDep, reason: 'Dependency not completed' },
+    })
+    return true
+  }
+
+  private async executeDevWorkflow(
+    task: Task,
+    cb: OrchestratorCallbacks,
+    completedTaskIds: Set<string>,
+    allFiles: FileChange[],
+  ): Promise<void> {
+    const devResponse = await this.runAgentForTask(task, cb, 'dev')
+    if (!devResponse) return
+
+    await this.saveResponseFiles(task, cb, devResponse.files, allFiles)
+
+    cb.updateTaskStatus(task.id, 'review')
+
+    const reviewResponse = await this.runAgentForTask(task, cb, 'review')
+    if (!reviewResponse) return
+
+    cb.broadcast('review', reviewResponse.message)
+
+    if (reviewResponse.status === 'success') {
+      this.markTaskCompleted(task, cb, completedTaskIds, 'review')
+    } else {
+      cb.updateTaskStatus(task.id, 'pending')
+      this.logInfo('Task execution completed', { taskId: task.id, success: false, reason: 'Review not approved' })
+    }
+  }
+
+  private async executeAgentWorkflow(
+    task: Task,
+    cb: OrchestratorCallbacks,
+    role: AgentRole,
+    completedTaskIds: Set<string>,
+  ): Promise<void> {
+    const response = await this.runAgentForTask(task, cb, role)
+    if (!response) return
+
+    if (response.status === 'success') {
+      this.markTaskCompleted(task, cb, completedTaskIds, role)
+    } else {
+      cb.updateTaskStatus(task.id, 'pending')
+      this.logInfo('Task execution completed', { taskId: task.id, success: false, reason: `${role} returned non-success` })
+    }
+  }
+
+  private async runAgentForTask(
+    task: Task,
+    cb: OrchestratorCallbacks,
+    role: AgentRole,
+  ): Promise<AgentResponse | null> {
+    this.emitTaskStarted(task, role)
+    const response = await this.executeAgentWithRetry(role, task, cb)
+
+    if (!response) {
+      this.emitTaskFailed(task, role, `${role} task failed after all retries`)
+      return null
+    }
+
+    cb.broadcast(role, response.message)
+    return response
+  }
+
+  private emitTaskStarted(task: Task, role: AgentRole): void {
+    this.logInfo('Task execution started', { taskId: task.id, role })
+    this.getEventBus().emit({
+      type: 'task:started',
+      agentRole: role,
+      taskId: task.id,
+    })
+  }
+
+  private emitTaskFailed(task: Task, role: AgentRole, reason: string): void {
+    this.recordFailedTask(task, reason)
+    this.obs.perf.increment('orchestrator.tasks.failed')
+    this.logError('Task execution completed', { taskId: task.id, success: false, reason: `${role} task failed` })
+    this.getEventBus().emit({
+      type: 'task:failed',
+      agentRole: role,
+      taskId: task.id,
+      data: { reason },
+    })
+  }
+
+  private markTaskCompleted(
+    task: Task,
+    cb: OrchestratorCallbacks,
+    completedTaskIds: Set<string>,
+    role: AgentRole,
+  ): void {
+    cb.updateTaskStatus(task.id, 'done')
+    completedTaskIds.add(task.id)
+    this.obs.perf.increment('orchestrator.tasks.completed')
+    this.logInfo('Task execution completed', { taskId: task.id, success: true })
+    this.getEventBus().emit({
+      type: 'task:completed',
+      agentRole: role,
+      taskId: task.id,
+    })
+  }
+
+  private async saveResponseFiles(
+    task: Task,
+    cb: OrchestratorCallbacks,
+    files: FileChange[] | undefined,
+    allFiles: FileChange[],
+  ): Promise<void> {
+    if (!files || files.length === 0) return
+
+    for (const file of files) {
+      try {
+        await cb.saveFile?.(file.path, file.content)
+        this.logInfo(`Saved file: ${file.path}`)
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error)
+        this.logError('File save failed', { path: file.path, error: errMsg })
+        this.obs.errors.track(
+          error instanceof Error
+            ? new FileSystemError(error.message, file.path)
+            : new FileSystemError(String(error), file.path),
+        )
+        this.getEventBus().emit({
+          type: 'error:tracked',
+          agentRole: 'dev',
+          taskId: task.id,
+          data: { level: 'error', message: 'File save failed', path: file.path, error: errMsg },
+        })
+      }
+    }
+    allFiles.push(...files)
+  }
+
+  private handleTaskError(task: Task, error: unknown): void {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error'
+    this.logError('Unexpected error in task', { taskId: task.id, error: errMsg })
+    this.recordFailedTask(task, errMsg)
+    this.obs.perf.increment('orchestrator.tasks.failed')
+    this.obs.errors.track(error instanceof Error ? error : new Error(String(error)))
+    this.logError('Task execution completed', { taskId: task.id, success: false, error: errMsg })
+    this.getEventBus().emit({
+      type: 'task:failed',
+      taskId: task.id,
+      data: { error: errMsg },
+    })
   }
 
   reset(): void {
