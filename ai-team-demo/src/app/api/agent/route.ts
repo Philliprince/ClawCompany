@@ -94,10 +94,10 @@ export const POST = withAuth(withRateLimit(async (request: NextRequest) => {
       if (result.success) {
         savedFiles.push(result.path || file.path)
         if (result.warnings && result.warnings.length > 0) {
-          console.warn('[Sandbox] Warnings for', file.path, ':', result.warnings)
+          logger.warn('[Sandbox] Warnings for ' + file.path, { warnings: result.warnings })
         }
       } else {
-        console.error('[Sandbox] Blocked write to', file.path, ':', result.error)
+        logger.error('[Sandbox] Blocked write to ' + file.path, { error: result.error })
       }
     }
 
