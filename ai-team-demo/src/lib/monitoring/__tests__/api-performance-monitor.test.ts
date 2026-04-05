@@ -157,6 +157,95 @@ describe('ApiPerformanceMonitor', () => {
         true
       );
     });
+
+    test('应该监控pm agent调用', async () => {
+      const mockPmCall = jest.fn().mockResolvedValue({ tasks: ['task1'], timeline: ['week1'] });
+      const wrappedCall = apiMonitor.monitorPmAgent(mockPmCall);
+      
+      const result = await wrappedCall('Build feature');
+      
+      expect(result).toEqual({ tasks: ['task1'], timeline: ['week1'] });
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledWith(
+        'agent-pm',
+        expect.any(Number),
+        expect.any(Number),
+        true
+      );
+    });
+
+    test('应该正确处理agent调用失败', async () => {
+      const mockAgentCall = jest.fn().mockRejectedValue(new Error('Agent crashed'));
+      const wrappedCall = apiMonitor.monitorAgentCall('failing-agent', mockAgentCall);
+      
+      await expect(wrappedCall('Test task')).rejects.toThrow('Agent crashed');
+      
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledWith(
+        'agent-failing-agent',
+        expect.any(Number),
+        expect.any(Number),
+        false
+      );
+    });
+  });
+
+  describe('数据库和文件系统监控', () => {
+    test('应该监控数据库查询成功', async () => {
+      const mockDbCall = jest.fn().mockResolvedValue({ rows: [] });
+      const wrappedCall = apiMonitor.monitorDbQuery('select-users', mockDbCall);
+      
+      const result = await wrappedCall();
+      
+      expect(result).toEqual({ rows: [] });
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledWith(
+        'db-select-users',
+        expect.any(Number),
+        expect.any(Number),
+        true
+      );
+    });
+
+    test('应该正确处理数据库查询失败', async () => {
+      const mockDbCall = jest.fn().mockRejectedValue(new Error('Connection refused'));
+      const wrappedCall = apiMonitor.monitorDbQuery('insert-user', mockDbCall);
+      
+      await expect(wrappedCall()).rejects.toThrow('Connection refused');
+      
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledWith(
+        'db-insert-user',
+        expect.any(Number),
+        expect.any(Number),
+        false
+      );
+    });
+
+    test('应该监控文件系统操作成功', async () => {
+      const mockFsCall = jest.fn().mockResolvedValue({ bytesWritten: 1024 });
+      const wrappedCall = apiMonitor.monitorFsOperation('write-file', mockFsCall);
+      
+      const result = await wrappedCall();
+      
+      expect(result).toEqual({ bytesWritten: 1024 });
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledWith(
+        'fs-write-file',
+        expect.any(Number),
+        expect.any(Number),
+        true
+      );
+    });
+
+    test('应该正确处理文件系统操作失败', async () => {
+      const mockFsCall = jest.fn().mockRejectedValue(new Error('Permission denied'));
+      const wrappedCall = apiMonitor.monitorFsOperation('delete-file', mockFsCall);
+      
+      await expect(wrappedCall()).rejects.toThrow('Permission denied');
+      
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledWith(
+        'fs-delete-file',
+        expect.any(Number),
+        expect.any(Number),
+        false
+      );
+    });
   });
 
   describe('性能阈值配置', () => {
@@ -176,6 +265,18 @@ describe('ApiPerformanceMonitor', () => {
       apiMonitor.setApiSlowThreshold(500);
       
       expect(performanceMonitor.setSlowThreshold).toHaveBeenCalledWith(500);
+    });
+
+    test('应该允许配置数据库查询阈值', () => {
+      apiMonitor.setDbSlowThreshold(1000);
+      
+      expect(performanceMonitor.setSlowThreshold).toHaveBeenCalledWith(1000);
+    });
+
+    test('应该允许配置文件系统操作阈值', () => {
+      apiMonitor.setFsSlowThreshold(200);
+      
+      expect(performanceMonitor.setSlowThreshold).toHaveBeenCalledWith(200);
     });
   });
 
@@ -204,6 +305,75 @@ describe('ApiPerformanceMonitor', () => {
       
       expect(results).toEqual(['result1', undefined, 'result3']);
       expect(performanceMonitor.recordApiCall).toHaveBeenCalledTimes(3);
+    });
+
+    test('应该处理空批量调用', async () => {
+      const results = await apiMonitor.monitorBatchCalls('empty-batch', []);
+      
+      expect(results).toEqual([]);
+      expect(performanceMonitor.recordApiCall).not.toHaveBeenCalled();
+    });
+
+    test('应该处理全部失败的批量调用', async () => {
+      const mockCalls = [
+        () => Promise.reject(new Error('Fail 1')),
+        () => Promise.reject(new Error('Fail 2'))
+      ];
+      
+      const results = await apiMonitor.monitorBatchCalls('fail-batch', mockCalls);
+      
+      expect(results).toEqual([undefined, undefined]);
+      expect(performanceMonitor.recordApiCall).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('统计和报告', () => {
+    test('应该获取单个API的性能统计', () => {
+      const mockStats = { avgTime: 150, maxTime: 300, callCount: 10 };
+      performanceMonitor.getApiStats = jest.fn().mockReturnValue(mockStats);
+      
+      const stats = apiMonitor.getApiStats('test-api');
+      
+      expect(stats).toEqual(mockStats);
+      expect(performanceMonitor.getApiStats).toHaveBeenCalledWith('test-api');
+    });
+
+    test('应该获取所有API的性能统计', () => {
+      performanceMonitor.getMonitoredApis = jest.fn().mockReturnValue(['api1', 'api2']);
+      performanceMonitor.getApiStats = jest.fn()
+        .mockReturnValueOnce({ avgTime: 100 })
+        .mockReturnValueOnce({ avgTime: 200 });
+      
+      const allStats = apiMonitor.getAllApiStats();
+      
+      expect(allStats).toEqual({
+        api1: { avgTime: 100 },
+        api2: { avgTime: 200 }
+      });
+    });
+
+    test('应该处理无监控API时的getAllApiStats', () => {
+      performanceMonitor.getMonitoredApis = jest.fn().mockReturnValue([]);
+      
+      const allStats = apiMonitor.getAllApiStats();
+      
+      expect(allStats).toEqual({});
+    });
+
+    test('应该生成性能报告', () => {
+      const mockReport = 'Performance Report:\nAll systems normal';
+      performanceMonitor.generatePerformanceReport = jest.fn().mockReturnValue(mockReport);
+      
+      const report = apiMonitor.getPerformanceReport();
+      
+      expect(report).toBe(mockReport);
+      expect(performanceMonitor.generatePerformanceReport).toHaveBeenCalled();
+    });
+
+    test('应该返回底层性能监控实例', () => {
+      const monitor = apiMonitor.getPerformanceMonitor();
+      
+      expect(monitor).toBe(performanceMonitor);
     });
   });
 
