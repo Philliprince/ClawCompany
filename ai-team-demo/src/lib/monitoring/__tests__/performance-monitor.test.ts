@@ -205,4 +205,87 @@ describe('PerformanceMonitor', () => {
       expect(monitor.getMonitoredApis()).toHaveLength(0);
     });
   });
+
+  describe('记录上限保护（防止 OOM）', () => {
+    test('应该在超过 maxRecordsPerApi 时自动裁剪旧记录', () => {
+      const monitorWithCap = new PerformanceMonitor({ maxRecordsPerApi: 5 });
+
+      for (let i = 0; i < 10; i++) {
+        monitorWithCap.recordApiCall('api', i * 100, i * 100 + 50);
+      }
+
+      const stats = monitorWithCap.getApiStats('api');
+      expect(stats.totalCalls).toBe(5);
+    });
+
+    test('应该保留最新的记录而非最旧的', () => {
+      const monitorWithCap = new PerformanceMonitor({ maxRecordsPerApi: 3 });
+
+      monitorWithCap.recordApiCall('api', 0, 100);
+      monitorWithCap.recordApiCall('api', 1000, 1100);
+      monitorWithCap.recordApiCall('api', 2000, 2100);
+      monitorWithCap.recordApiCall('api', 3000, 3100);
+      monitorWithCap.recordApiCall('api', 4000, 4100);
+
+      const stats = monitorWithCap.getApiStats('api');
+      expect(stats.totalCalls).toBe(3);
+      expect(stats.minResponseTime).toBe(100);
+      expect(stats.maxResponseTime).toBe(100);
+    });
+
+    test('不同 API 名字的记录应独立计数', () => {
+      const monitorWithCap = new PerformanceMonitor({ maxRecordsPerApi: 2 });
+
+      monitorWithCap.recordApiCall('api-a', 0, 100);
+      monitorWithCap.recordApiCall('api-a', 0, 200);
+      monitorWithCap.recordApiCall('api-a', 0, 300);
+      monitorWithCap.recordApiCall('api-b', 0, 400);
+
+      expect(monitorWithCap.getApiStats('api-a').totalCalls).toBe(2);
+      expect(monitorWithCap.getApiStats('api-b').totalCalls).toBe(1);
+    });
+
+    test('默认 maxRecordsPerApi 为 1000', () => {
+      for (let i = 0; i < 1100; i++) {
+        monitor.recordApiCall('api', i, i + 10);
+      }
+
+      const stats = monitor.getApiStats('api');
+      expect(stats.totalCalls).toBe(1000);
+    });
+
+    test('maxRecordsPerApi 为 0 时不限制', () => {
+      const monitorNoCap = new PerformanceMonitor({ maxRecordsPerApi: 0 });
+
+      for (let i = 0; i < 50; i++) {
+        monitorNoCap.recordApiCall('api', i, i + 10);
+      }
+
+      expect(monitorNoCap.getApiStats('api').totalCalls).toBe(50);
+    });
+
+    test('构造函数应接受 maxMemoryRecords 参数', () => {
+      const monitorCustom = new PerformanceMonitor({ maxMemoryRecords: 3 });
+
+      for (let i = 0; i < 5; i++) {
+        monitorCustom.recordMemoryUsage({ used: i * 100, total: 1000, percentage: i * 10 });
+      }
+
+      const stats = monitorCustom.getMemoryStats();
+      expect(stats.peakUsage).toBe(400);
+    });
+
+    test('generatePerformanceReport 应只包含裁剪后的数据', () => {
+      const monitorWithCap = new PerformanceMonitor({ maxRecordsPerApi: 2 });
+
+      monitorWithCap.recordApiCall('api1', 0, 100, true);
+      monitorWithCap.recordApiCall('api1', 0, 200, true);
+      monitorWithCap.recordApiCall('api1', 0, 300, true);
+      monitorWithCap.recordApiCall('api1', 0, 400, false);
+
+      const report = monitorWithCap.generatePerformanceReport();
+      expect(report.totalApiCalls).toBe(2);
+      expect(report.successRate).toBe(0.5);
+    });
+  });
 });

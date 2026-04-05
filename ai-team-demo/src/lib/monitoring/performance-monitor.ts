@@ -39,11 +39,22 @@ export interface PerformanceReport {
   timestamp: number;
 }
 
+export interface PerformanceMonitorOptions {
+  maxRecordsPerApi?: number;
+  maxMemoryRecords?: number;
+}
+
 export class PerformanceMonitor {
   private apiCalls: Map<string, ApiCallRecord[]> = new Map();
   private memoryRecords: Array<{ usage: number; percentage: number; timestamp: number }> = [];
-  private slowThreshold: number = 1000; // 默认1秒
-  private maxMemoryRecords: number = 100;
+  private slowThreshold: number = 1000;
+  private maxMemoryRecords: number;
+  private maxRecordsPerApi: number;
+
+  constructor(options: PerformanceMonitorOptions = {}) {
+    this.maxRecordsPerApi = options.maxRecordsPerApi ?? 1000;
+    this.maxMemoryRecords = options.maxMemoryRecords ?? 100;
+  }
 
   /**
    * 记录API调用
@@ -62,6 +73,13 @@ export class PerformanceMonitor {
     }
     
     this.apiCalls.get(api)!.push(record);
+
+    if (this.maxRecordsPerApi > 0) {
+      const records = this.apiCalls.get(api)!;
+      if (records.length > this.maxRecordsPerApi) {
+        this.apiCalls.set(api, records.slice(-this.maxRecordsPerApi));
+      }
+    }
     
     return record;
   }
