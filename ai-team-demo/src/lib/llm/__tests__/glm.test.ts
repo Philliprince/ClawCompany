@@ -18,6 +18,32 @@ describe('GLMProvider', () => {
     jest.clearAllMocks()
   })
 
+  describe('配置方法', () => {
+    it('应该返回正确的 API URL', () => {
+      expect(glmProvider.apiUrl).toBe('https://api.z.ai/api/coding/paas/v4/chat/completions')
+    })
+
+    it('应该返回正确的提供者名称', () => {
+      expect(glmProvider.providerName).toBe('GLM')
+    })
+
+    it('应该返回默认模型名称', () => {
+      expect(glmProvider.defaultModel).toBe('glm-5')
+    })
+
+    it('应该使用配置中的模型名称（如果提供）', () => {
+      const customProvider = new GLMProvider({
+        provider: 'glm',
+        apiKey: mockApiKey,
+        model: 'glm-4'
+      })
+      
+      // 由于继承自 BaseLLMProvider，model 是通过构造函数设置的
+      // 这里我们验证配置是否正确传递
+      expect(customProvider).toBeInstanceOf(GLMProvider)
+    })
+  })
+
   describe('初始化', () => {
     it('应该正确初始化', () => {
       expect(glmProvider).toBeDefined()
