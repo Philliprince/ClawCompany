@@ -12,6 +12,8 @@
  * 需要通过 OpenClaw Gateway HTTP API 调用。
  */
 
+import type { SessionResult, HistoryResult } from 'openclaw'
+
 export interface Task {
   id: string
   title: string
@@ -58,12 +60,14 @@ const CONFIG = {
  * @param tools OpenClaw 工具集（可选，如果在 OpenClaw 环境中运行）
  * @returns 工作流结果
  */
+export type OpenClawTools = {
+  sessions_spawn?: (options: import('openclaw').SpawnOptions) => Promise<SessionResult>
+  sessions_history?: (options: import('openclaw').HistoryOptions) => Promise<HistoryResult>
+}
+
 export async function orchestrate(
   userRequest: string,
-  tools?: {
-    sessions_spawn?: typeof sessions_spawn
-    sessions_history?: typeof sessions_history
-  }
+  tools?: OpenClawTools
 ): Promise<WorkflowResult> {
   console.log(`\n🚀 ClawCompany Orchestrator 启动`)
   console.log(`📋 用户需求: ${userRequest}\n`)
@@ -127,10 +131,7 @@ export async function orchestrate(
  */
 async function spawnPMAgent(
   userRequest: string,
-  tools?: {
-    sessions_spawn?: typeof sessions_spawn
-    sessions_history?: typeof sessions_history
-  }
+  tools?: OpenClawTools
 ): Promise<{
   message: string
   tasks: Task[]
@@ -174,7 +175,7 @@ async function spawnPMAgent(
     }
 
     // 使用真实的 sessions_spawn
-    const sessionKey = await tools.sessions_spawn({
+    const spawnResult = await tools.sessions_spawn({
       runtime: 'subagent',
       task: taskPrompt,
       thinking: 'high',
@@ -182,10 +183,10 @@ async function spawnPMAgent(
       runTimeoutSeconds: 60
     })
 
-    console.log(`   PM Agent session: ${sessionKey}`)
+    console.log(`   PM Agent session: ${spawnResult.sessionKey}`)
 
     // 等待完成
-    const result = await waitForCompletion(sessionKey, 60000, tools.sessions_history)
+    const result = await waitForCompletion(spawnResult.sessionKey, 60000, tools.sessions_history)
     
     // 解析 JSON
     const parsed = JSON.parse(result)
@@ -218,10 +219,7 @@ async function spawnPMAgent(
  */
 async function spawnDevAgent(
   task: Task,
-  tools?: {
-    sessions_spawn?: typeof sessions_spawn
-    sessions_history?: typeof sessions_history
-  }
+  tools?: OpenClawTools
 ): Promise<{
   message: string
   files: string[]
@@ -253,7 +251,7 @@ async function spawnDevAgent(
     }
 
     // 使用真实的 sessions_spawn (ACP runtime)
-    const sessionKey = await tools.sessions_spawn({
+    const spawnResult = await tools.sessions_spawn({
       runtime: 'acp',
       agentId: CONFIG.agents.dev,
       task: taskPrompt,
@@ -262,10 +260,10 @@ async function spawnDevAgent(
       cwd: process.cwd()
     })
 
-    console.log(`   Dev Agent session: ${sessionKey}`)
+    console.log(`   Dev Agent session: ${spawnResult.sessionKey}`)
 
     // 等待完成
-    const result = await waitForCompletion(sessionKey, 120000, tools.sessions_history)
+    const result = await waitForCompletion(spawnResult.sessionKey, 120000, tools.sessions_history)
     
     return {
       message: result,
@@ -286,10 +284,7 @@ async function spawnDevAgent(
 async function spawnReviewAgent(
   task: Task,
   files: string[],
-  tools?: {
-    sessions_spawn?: typeof sessions_spawn
-    sessions_history?: typeof sessions_history
-  }
+  tools?: OpenClawTools
 ): Promise<{
   approved: boolean
   message: string
@@ -329,7 +324,7 @@ async function spawnReviewAgent(
     }
 
     // 使用真实的 sessions_spawn
-    const sessionKey = await tools.sessions_spawn({
+    const spawnResult = await tools.sessions_spawn({
       runtime: 'subagent',
       task: reviewPrompt,
       thinking: 'high',
@@ -337,10 +332,10 @@ async function spawnReviewAgent(
       runTimeoutSeconds: 60
     })
 
-    console.log(`   Review Agent session: ${sessionKey}`)
+    console.log(`   Review Agent session: ${spawnResult.sessionKey}`)
 
     // 等待完成
-    const result = await waitForCompletion(sessionKey, 60000, tools.sessions_history)
+    const result = await waitForCompletion(spawnResult.sessionKey, 60000, tools.sessions_history)
     
     // 解析 JSON
     const parsed = JSON.parse(result)
@@ -363,33 +358,33 @@ async function spawnReviewAgent(
 async function waitForCompletion(
   sessionKey: string,
   timeout: number,
-  sessions_history: typeof sessions_history
+  sessions_history?: (options: import('openclaw').HistoryOptions) => Promise<HistoryResult>
 ): Promise<string> {
   const startTime = Date.now()
   const pollInterval = 2000
 
   while (Date.now() - startTime < timeout) {
     try {
-      const history = await sessions_history({
+      if (!sessions_history) {
+        throw new Error('sessions_history not available')
+      }
+
+      const historyResult = await sessions_history({
         sessionKey,
         limit: 1
       })
 
-      if (history && history.length > 0) {
-        const lastMessage = history[0]
-        
-        if (lastMessage.status === 'completed') {
-          return lastMessage.content
-        }
-        
-        if (lastMessage.status === 'failed') {
-          throw new Error(`Session failed: ${lastMessage.content}`)
-        }
+      const messages = historyResult.messages
+      if (messages && messages.length > 0) {
+        const lastMessage = messages[messages.length - 1]
+        return lastMessage.content
       }
 
       await new Promise(resolve => setTimeout(resolve, pollInterval))
     } catch (error) {
-      // 继续轮询
+      if (error instanceof Error && error.message.includes('Session failed')) {
+        throw error
+      }
       await new Promise(resolve => setTimeout(resolve, pollInterval))
     }
   }
