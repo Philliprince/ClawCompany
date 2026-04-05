@@ -159,7 +159,19 @@
 - **已完成**: 12/12 (100%)
 - **总用时**: ~7.5 小时
 - **测试覆盖**: 1106/1106 测试通过（60 个测试套件）
-- **最新 Commit**: (pending)
+- **最新 Commit**: 45c5012 (2026-04-05)
+- **构建**: ✅ 通过
+- **测试**: 2808/2808 通过（100%）
+
+### 迭代后修复 (2026-04-05)
+- **Commit**: 45c5012
+- **内容**:
+  - 修复 EventBus.emit 签名与基类 TypedEventBus 不兼容的类型冲突
+  - 修复 EventBusEnhanced.executeHandlers 类型（Array vs Set）
+  - 修复 TypedEventBus maxHistorySize readonly 导致 resizeHistory 编译失败
+  - 修复 orchestrator/index.ts isolatedModules re-export 类型错误
+  - 修复 useDashboardStore SSR prerender 缺少 getServerSnapshot
+  - 修复 metrics-aggregator 内存断言 flaky test（改用容差比较）
 
 ---
 
