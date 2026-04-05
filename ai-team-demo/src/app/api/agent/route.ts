@@ -250,7 +250,7 @@ export const GET = withAuth(async (request: NextRequest) => {
 }, 'Agent API')
 
 export const PUT = withAuth(async (request: NextRequest) => {
-  const body = await request.json()
+  const body: unknown = await request.json()
   const parsed = parseRequestBody(AgentPutRequestSchema, body)
   if ('error' in parsed) return parsed.error
 
