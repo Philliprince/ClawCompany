@@ -177,6 +177,39 @@ describe('TaskQueue', () => {
         })
       ).rejects.toThrow('timeout')
     })
+
+    it('should not double-resolve on timeout', async () => {
+      queue = new TaskQueue({ concurrency: 1 })
+      let resolveCount = 0
+      let rejectCount = 0
+
+      const promise = queue.add(
+        async () => {
+          await new Promise(r => setTimeout(r, 200))
+          return 'late result'
+        },
+        { timeout: 50 }
+      )
+
+      promise.then(
+        () => resolveCount++,
+        () => rejectCount++
+      )
+
+      await expect(promise).rejects.toThrow('timeout')
+
+      // Wait for task to potentially complete
+      await new Promise(r => setTimeout(r, 200))
+
+      // Should have rejected once, never resolved
+      expect(resolveCount).toBe(0)
+      expect(rejectCount).toBe(1)
+
+      // Check stats are correct
+      const stats = queue.getStats()
+      expect(stats.failed).toBe(1)
+      expect(stats.completed).toBe(0)
+    })
   })
 
   describe('abort / cancellation', () => {

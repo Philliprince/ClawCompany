@@ -123,16 +123,23 @@ export class TaskQueue {
 
   private async executeTask(task: InternalTask): Promise<void> {
     let timeoutId: ReturnType<typeof setTimeout> | undefined
+    let settled = false
 
     const taskPromise = (async () => {
       try {
         const result = await task.fn()
-        task.resolve(result)
-        this.completed++
+        if (!settled) {
+          settled = true
+          task.resolve(result)
+          this.completed++
+        }
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error))
-        task.reject(err)
-        this.failed++
+        if (!settled) {
+          settled = true
+          const err = error instanceof Error ? error : new Error(String(error))
+          task.reject(err)
+          this.failed++
+        }
       } finally {
         this.running--
         if (timeoutId !== undefined) {
@@ -145,7 +152,11 @@ export class TaskQueue {
 
     if (task.timeout !== undefined && task.timeout > 0) {
       timeoutId = setTimeout(() => {
-        task.reject(new Error(`Task timeout after ${task.timeout}ms`))
+        if (!settled) {
+          settled = true
+          task.reject(new Error(`Task timeout after ${task.timeout}ms`))
+          this.failed++
+        }
       }, task.timeout)
     }
 
