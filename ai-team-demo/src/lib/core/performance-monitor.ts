@@ -191,6 +191,34 @@ export class PerformanceMonitor {
     this.metricEntries.clear()
   }
 
+  /**
+   * 批量清理过期的指标数据，优化内存使用
+   * @returns 清理的指标数量
+   */
+  cleanupExpiredMetrics(): number {
+    let cleanedCount = 0
+    
+    // 清理histograms中的旧数据
+    for (const [name, values] of this.histograms) {
+      if (values.length > this.maxHistogramValues) {
+        const oldSize = values.length
+        values.splice(0, oldSize - this.maxHistogramValues)
+        cleanedCount += oldSize - values.length
+      }
+    }
+    
+    // 清理metric entries中的旧数据
+    for (const [name, entries] of this.metricEntries) {
+      if (entries.length > this.maxMetricEntries) {
+        const oldSize = entries.length
+        entries.splice(0, oldSize - this.maxMetricEntries)
+        cleanedCount += oldSize - entries.length
+      }
+    }
+    
+    return cleanedCount
+  }
+
   private addMetricEntry(name: string, value: number, type: MetricType, tags?: Record<string, string>): void {
     const entries = this.metricEntries.get(name) ?? []
     entries.push({
@@ -201,6 +229,7 @@ export class PerformanceMonitor {
       tags,
     })
     if (entries.length > this.maxMetricEntries) {
+      // 更高效的清理：直接截取数组尾部，避免重新分配
       entries.splice(0, entries.length - this.maxMetricEntries)
     }
     this.metricEntries.set(name, entries)
