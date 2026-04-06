@@ -588,5 +588,154 @@ describe('ChatManager', () => {
         expect(() => ChatManager.fromJSON('{}')).toThrow()
       })
     })
+
+    describe('fromJSON messageMap edge cases', () => {
+      it('handles messages with missing IDs by generating new ones', () => {
+        const manager = new ChatManager('test')
+        manager.addMessage('user', 'msg1')
+        manager.addMessage('dev', 'msg2')
+        
+        const json = manager.toJSON()
+        const parsed = JSON.parse(json)
+        
+        // Remove IDs from the JSON to simulate the edge case
+        parsed.messages.forEach((msg: any) => {
+          delete msg.id
+        })
+        
+        const modifiedJson = JSON.stringify(parsed)
+        const restored = ChatManager.fromJSON(modifiedJson)
+        
+        const history = restored.getHistory()
+        expect(history).toHaveLength(2)
+        expect(history[0].content).toBe('msg1')
+        expect(history[1].content).toBe('msg2')
+        
+        // Verify all messages have valid IDs
+        for (const msg of history) {
+          expect(typeof msg.id).toBe('string')
+          expect(msg.id.length).toBeGreaterThan(0)
+          expect(msg.id.startsWith('msg_')).toBe(true)
+        }
+        
+        // Verify messageMap works correctly
+        expect(restored.getMessage(history[0].id)).toBeDefined()
+        expect(restored.getMessage(history[1].id)).toBeDefined()
+      })
+
+      it('handles messages with missing types by defaulting to text', () => {
+        const manager = new ChatManager('test')
+        manager.addMessage('user', 'msg1')
+        manager.addMessage('dev', 'msg2')
+        
+        const json = manager.toJSON()
+        const parsed = JSON.parse(json)
+        
+        // Remove types from messages
+        parsed.messages.forEach((msg: any) => {
+          delete msg.type
+        })
+        
+        const modifiedJson = JSON.stringify(parsed)
+        const restored = ChatManager.fromJSON(modifiedJson)
+        
+        const history = restored.getHistory()
+        expect(history).toHaveLength(2)
+        expect(history[0].type).toBe('text')
+        expect(history[1].type).toBe('text')
+      })
+
+      it('handles messages with missing timestamps by defaulting to current time', () => {
+        const manager = new ChatManager('test')
+        manager.addMessage('user', 'msg1')
+        
+        const json = manager.toJSON()
+        const parsed = JSON.parse(json)
+        
+        // Remove timestamp from first message
+        delete parsed.messages[0].timestamp
+        
+        const modifiedJson = JSON.stringify(parsed)
+        const restored = ChatManager.fromJSON(modifiedJson)
+        
+        const history = restored.getHistory()
+        expect(history).toHaveLength(1)
+        expect(history[0].timestamp).toBeInstanceOf(Date)
+        
+        // The timestamp should be close to now (within 1 second)
+        const now = Date.now()
+        const timestamp = history[0].timestamp.getTime()
+        expect(Math.abs(now - timestamp)).toBeLessThan(1000)
+      })
+
+      it('handles messages with string timestamps and converts to Date objects', () => {
+        const manager = new ChatManager('test')
+        manager.addMessage('user', 'msg1')
+        
+        const json = manager.toJSON()
+        const parsed = JSON.parse(json)
+        
+        // Convert timestamp to string
+        parsed.messages[0].timestamp = new Date().toISOString()
+        
+        const modifiedJson = JSON.stringify(parsed)
+        const restored = ChatManager.fromJSON(modifiedJson)
+        
+        const history = restored.getHistory()
+        expect(history).toHaveLength(1)
+        expect(history[0].timestamp).toBeInstanceOf(Date)
+        
+        // Verify the timestamp is preserved correctly
+        const originalTimestamp = new Date(parsed.messages[0].timestamp).getTime()
+        const restoredTimestamp = history[0].timestamp.getTime()
+        expect(restoredTimestamp).toBe(originalTimestamp)
+      })
+
+      it('handles completely empty messages array', () => {
+        const manager = new ChatManager('test')
+        const json = manager.toJSON()
+        const parsed = JSON.parse(json)
+        
+        // Clear messages array
+        parsed.messages = []
+        
+        const modifiedJson = JSON.stringify(parsed)
+        const restored = ChatManager.fromJSON(modifiedJson)
+        
+        expect(restored.getHistory()).toHaveLength(0)
+        expect(restored.getMessage('nonexistent')).toBeUndefined()
+      })
+
+      it('handles duplicate message IDs gracefully', () => {
+        const manager = new ChatManager('test')
+        manager.addMessage('user', 'msg1')
+        
+        const json = manager.toJSON()
+        const parsed = JSON.parse(json)
+        
+        // Create a duplicate ID
+        parsed.messages.push({
+          ...parsed.messages[0],
+          content: 'duplicate msg'
+        })
+        
+        const modifiedJson = JSON.stringify(parsed)
+        const restored = ChatManager.fromJSON(modifiedJson)
+        
+        const history = restored.getHistory()
+        expect(history).toHaveLength(2)
+        
+        // Both messages should have IDs
+        expect(history[0].id).toBeDefined()
+        expect(history[1].id).toBeDefined()
+        
+        // When duplicate IDs exist, the later message overwrites the earlier one in the map
+        // But both messages are still in the array
+        expect(restored.getMessage(history[0].id)).toBeDefined()
+        
+        // The second message should be findable by its ID
+        expect(restored.getMessage(history[1].id)).toBeDefined()
+      })
+    })
   })
 })
