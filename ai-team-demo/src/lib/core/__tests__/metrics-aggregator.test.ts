@@ -160,7 +160,16 @@ describe('MetricsAggregator', () => {
     })
 
     it('should assess system health correctly', () => {
-      (mockDataSource.getMetricEntries as jest.Mock).mockReturnValue([
+      // Mock process.memoryUsage to avoid flaky test due to memory fluctuations
+      const mockMemoryUsage = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+        heapUsed: 50 * 1024 * 1024, // 50 MB
+        heapTotal: 100 * 1024 * 1024, // 100 MB (50% usage)
+        external: 0,
+        rss: 0,
+        arrayBuffers: 0,
+      })
+
+      ;(mockDataSource.getMetricEntries as jest.Mock).mockReturnValue([
         { name: 'task.total', value: 100, timestamp: new Date().toISOString(), type: 0 },
         { name: 'task.completed', value: 98, timestamp: new Date().toISOString(), type: 0 },
       ])
@@ -173,6 +182,7 @@ describe('MetricsAggregator', () => {
 
       let metrics = metricsAggregator.getCurrentMetrics()
       expect(metrics.health.overall).toBe('healthy')
+      mockMemoryUsage.mockRestore()
       ;(mockDataSource.getMetricEntries as jest.Mock).mockReturnValue([
         { name: 'task.total', value: 10, timestamp: new Date().toISOString(), type: 0 },
         { name: 'task.completed', value: 3, timestamp: new Date().toISOString(), type: 0 },
