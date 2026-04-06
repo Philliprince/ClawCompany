@@ -58,11 +58,13 @@ export function createMockNextRequestWithAuth(
     headers?: Record<string, string>;
   } = {}
 ): NextRequest {
+  const finalHeaders = {
+    'x-api-key': apiKey,
+    ...options.headers,
+  }
+  
   return createMockNextRequest(data, {
     ...options,
-    headers: {
-      'x-api-key': apiKey,
-      ...options.headers,
-    },
+    headers: finalHeaders,
   });
 }
