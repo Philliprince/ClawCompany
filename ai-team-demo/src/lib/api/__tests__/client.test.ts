@@ -63,7 +63,8 @@ describe('API Client', () => {
       const result = await sendMessage('')
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('API error: 400')
+      // 空字符串在输入验证阶段就被拦截，不会到达 API
+      expect(result.error).toBe('Message must be a non-empty string')
       consoleSpy.mockRestore()
     })
 
@@ -108,8 +109,22 @@ describe('API Client', () => {
       const mockResponse = {
         success: true,
         message: 'Done',
-        tasks: [{ id: '1', title: 'Task 1' }],
-        chatHistory: [{ agent: 'user', content: 'Hello' }],
+        tasks: [{
+          id: '1',
+          title: 'Task 1',
+          description: 'Test task',
+          status: 'pending',
+          assignedTo: 'dev' as const,
+          dependencies: [],
+          files: [],
+        }],
+        chatHistory: [{
+          id: '1',
+          agent: 'user' as const,
+          content: 'Hello',
+          type: 'text' as const,
+          timestamp: new Date().toISOString(),
+        }],
       }
       fetchSpy.mockResolvedValueOnce({
         ok: true,
@@ -145,8 +160,22 @@ describe('API Client', () => {
   describe('getChatHistory', () => {
     it('should fetch and return chat history on success', async () => {
       const mockResponse = {
-        tasks: [{ id: '1', title: 'Task 1' }],
-        chatHistory: [{ agent: 'user', content: 'Hello' }],
+        tasks: [{
+          id: '1',
+          title: 'Task 1',
+          description: 'Test task',
+          status: 'pending',
+          assignedTo: 'dev' as const,
+          dependencies: [],
+          files: [],
+        }],
+        chatHistory: [{
+          id: '1',
+          agent: 'user' as const,
+          content: 'Hello',
+          type: 'text' as const,
+          timestamp: new Date().toISOString(),
+        }],
         agents: [{ id: 'pm', name: 'PM', role: 'pm', description: 'PM Agent' }],
       }
       fetchSpy.mockResolvedValueOnce({
