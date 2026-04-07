@@ -99,12 +99,23 @@ export class MetricsAggregator {
   }
 
   private getMemoryUsage(): PerformanceMetrics['memoryUsage'] {
-    const mem = process.memoryUsage()
-    const used = Math.round(mem.heapUsed / 1024 / 1024)
-    const total = Math.round(mem.heapTotal / 1024 / 1024)
-    const percentage = total > 0 ? Math.round((used / total) * 100) : 0
+    if (typeof process !== 'undefined' && typeof process.memoryUsage === 'function') {
+      const mem = process.memoryUsage()
+      const used = Math.round(mem.heapUsed / 1024 / 1024)
+      const total = Math.round(mem.heapTotal / 1024 / 1024)
+      const percentage = total > 0 ? Math.round((used / total) * 100) : 0
+      return { used, total, percentage }
+    }
 
-    return { used, total, percentage }
+    if (typeof performance !== 'undefined' && (performance as any).memory) {
+      const mem = (performance as any).memory
+      const used = Math.round(mem.usedJSHeapSize / 1024 / 1024)
+      const total = Math.round(mem.totalJSHeapSize / 1024 / 1024)
+      const percentage = total > 0 ? Math.round((used / total) * 100) : 0
+      return { used, total, percentage }
+    }
+
+    return { used: 0, total: 0, percentage: 0 }
   }
 
   private calculateTaskMetrics(): PerformanceMetrics['tasks'] {
@@ -225,7 +236,7 @@ export class MetricsAggregator {
     
     return {
       overall,
-      uptime: process.uptime(), // 进程运行时间
+      uptime: (typeof process !== 'undefined' && typeof process.uptime === 'function') ? process.uptime() : (typeof performance !== 'undefined' && performance.now ? performance.now() / 1000 : 0),
       lastUpdated: new Date()
     }
   }

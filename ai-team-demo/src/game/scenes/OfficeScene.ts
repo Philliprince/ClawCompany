@@ -94,35 +94,30 @@ export class OfficeScene extends Phaser.Scene {
     super({ key: 'OfficeScene' });
   }
 
-  async preload(): Promise<void> {
-    this.createParticleTexture();
+  preload(): void {
+  }
 
-    try {
-      const response = await fetch('/assets/office-tilemap.json');
-      this.tilemapData = await response.json();
-    } catch {
-      console.warn('Failed to load tilemap, using defaults');
-      this.tilemapData = {
-        width: 20,
-        height: 15,
-        tileSize: 32,
-        workstations: [
-          { id: 'ws1', x: 4, y: 8, label: 'Dev1', status: 'idle', taskType: 'coding' },
-          { id: 'ws2', x: 8, y: 8, label: 'Dev2', status: 'idle', taskType: 'testing' },
-          { id: 'ws3', x: 12, y: 8, label: 'PM', status: 'idle', taskType: 'meeting' },
-          { id: 'ws4', x: 16, y: 8, label: 'Review', status: 'idle', taskType: 'review' },
-        ],
-        platforms: [
-          { x: 0, y: 14, width: 20, height: 1, type: 'floor' },
-          { x: 0, y: 0, width: 1, height: 14, type: 'wall_left' },
-          { x: 19, y: 0, width: 1, height: 14, type: 'wall_right' },
-          { x: 2, y: 9, width: 4, height: 0.5, type: 'desk' },
-          { x: 6, y: 9, width: 4, height: 0.5, type: 'desk' },
-          { x: 10, y: 9, width: 4, height: 0.5, type: 'desk' },
-          { x: 14, y: 9, width: 4, height: 0.5, type: 'desk' },
-        ],
-      };
-    }
+  private getDefaultTilemapData(): TilemapData {
+    return {
+      width: 20,
+      height: 15,
+      tileSize: 32,
+      workstations: [
+        { id: 'ws1', x: 4, y: 8, label: 'Dev1', status: 'idle' as const, taskType: 'coding' },
+        { id: 'ws2', x: 8, y: 8, label: 'Dev2', status: 'idle' as const, taskType: 'testing' },
+        { id: 'ws3', x: 12, y: 8, label: 'PM', status: 'idle' as const, taskType: 'meeting' },
+        { id: 'ws4', x: 16, y: 8, label: 'Review', status: 'idle' as const, taskType: 'review' },
+      ],
+      platforms: [
+        { x: 0, y: 14, width: 20, height: 1, type: 'floor' },
+        { x: 0, y: 0, width: 1, height: 14, type: 'wall_left' },
+        { x: 19, y: 0, width: 1, height: 14, type: 'wall_right' },
+        { x: 2, y: 9, width: 4, height: 0.5, type: 'desk' },
+        { x: 6, y: 9, width: 4, height: 0.5, type: 'desk' },
+        { x: 10, y: 9, width: 4, height: 0.5, type: 'desk' },
+        { x: 14, y: 9, width: 4, height: 0.5, type: 'desk' },
+      ],
+    };
   }
 
   private createParticleTexture(): void {
@@ -160,6 +155,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.createParticleTexture();
+    this.tilemapData = this.getDefaultTilemapData();
+
     this.platforms = this.physics.add.staticGroup();
     this.particleSystem = new ParticleSystem();
     this.performanceMonitor = new PerformanceMonitor({
