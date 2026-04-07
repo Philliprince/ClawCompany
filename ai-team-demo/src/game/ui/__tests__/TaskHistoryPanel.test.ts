@@ -2,30 +2,89 @@ import { TaskHistoryPanel } from '../TaskHistoryPanel';
 import { TaskHistoryStore } from '../../data/TaskHistoryStore';
 import { Task, TaskStatus } from '../../types/Task';
 
-jest.mock('phaser', () => {
-  const createMockGraphics = () => {
-    const g: any = {
-      clear: jest.fn(),
-      fillStyle: jest.fn(),
-      fillRect: jest.fn(),
-      fillRoundedRect: jest.fn(),
-      setPosition: jest.fn(),
-      setDepth: jest.fn(),
-      setAlpha: jest.fn(),
-      destroy: jest.fn(),
-      setInteractive: jest.fn().mockReturnThis(),
-      on: jest.fn(),
-      alpha: 0,
-      width: 0,
-    };
-    return g;
-  };
+interface MockGraphics {
+  clear: jest.Mock;
+  fillStyle: jest.Mock;
+  fillRect: jest.Mock;
+  fillRoundedRect: jest.Mock;
+  setPosition: jest.Mock;
+  setDepth: jest.Mock;
+  setAlpha: jest.Mock;
+  destroy: jest.Mock;
+  setInteractive: jest.Mock<() => MockGraphics>;
+  on: jest.Mock;
+  alpha: number;
+  width: number;
+}
 
-  const createMockText = () => {
-    const t: any = {
+interface MockText {
+  text: string;
+  setText: jest.Mock<(val: string) => void>;
+  setOrigin: jest.Mock;
+  width: number;
+  height: number;
+  setPosition: jest.Mock;
+  destroy: jest.Mock;
+  setDepth: jest.Mock;
+  setInteractive: jest.Mock;
+  on: jest.Mock;
+}
+
+interface MockContainer {
+  x: number;
+  y: number;
+  setDepth: jest.Mock;
+  setAlpha: jest.Mock;
+  setVisible: jest.Mock<(val: boolean) => void>;
+  add: jest.Mock<(child: any) => void>;
+  remove: jest.Mock<(child: any) => void>;
+  setScrollFactor: jest.Mock;
+  setInteractive: jest.Mock;
+  on: jest.Mock;
+  getBounds: jest.Mock<() => { contains: (x: number, y: number) => boolean }>;
+  destroy: jest.Mock;
+  _visible: boolean;
+}
+
+interface MockScene {
+  add: {
+    container: jest.Mock<() => MockContainer>;
+    graphics: jest.Mock<() => MockGraphics>;
+    text: jest.Mock<() => MockText>;
+  };
+  time: {
+    delayedCall: jest.Mock<(delay: number, callback: () => void) => { destroy: jest.Mock }>;
+  };
+  tweens: {
+    add: jest.Mock<(config: any) => { stop: jest.Mock }>;
+  };
+  input: {
+    on: jest.Mock;
+    off: jest.Mock;
+  };
+}
+
+jest.mock('phaser', () => {
+  const createMockGraphics = (): MockGraphics => ({
+    clear: jest.fn(),
+    fillStyle: jest.fn(),
+    fillRect: jest.fn(),
+    fillRoundedRect: jest.fn(),
+    setPosition: jest.fn(),
+    setDepth: jest.fn(),
+    setAlpha: jest.fn(),
+    destroy: jest.fn(),
+    setInteractive: jest.fn().mockReturnThis(),
+    on: jest.fn(),
+    alpha: 0,
+    width: 0,
+  });
+
+  const createMockText = (): MockText => {
+    const textObj: MockText = {
       text: '',
       setText: jest.fn((val: string) => {
-        t.text = val;
+        textObj.text = val;
       }),
       setOrigin: jest.fn(),
       width: 80,
@@ -36,12 +95,12 @@ jest.mock('phaser', () => {
       setInteractive: jest.fn(),
       on: jest.fn(),
     };
-    return t;
+    return textObj;
   };
 
-  const createMockContainer = () => {
+  const createMockContainer = (): MockContainer => {
     const children: any[] = [];
-    const c: any = {
+    const c: MockContainer = {
       x: 0,
       y: 0,
       setDepth: jest.fn(),
@@ -69,7 +128,7 @@ jest.mock('phaser', () => {
     return c;
   };
 
-  const mockScene: any = {
+  const mockScene: MockScene = {
     add: {
       container: jest.fn(() => createMockContainer()),
       graphics: jest.fn(() => createMockGraphics()),
@@ -83,6 +142,7 @@ jest.mock('phaser', () => {
         if (config.onComplete) {
           config.onComplete();
         }
+        return { stop: jest.fn() };
       }),
     },
     input: {
@@ -108,7 +168,25 @@ jest.mock('phaser', () => {
   };
 });
 
-const Phaser = require('phaser');
+interface PhaserMock {
+  default: {
+    GameObjects: {
+      Container: jest.Mock;
+      Graphics: jest.Mock;
+      Text: jest.Mock;
+    };
+    Geom: {
+      Rectangle: {
+        Contains: jest.Mock;
+      };
+    };
+  };
+  __mocks: {
+    mockScene: MockScene;
+  };
+}
+
+const Phaser = require('phaser') as PhaserMock;
 const { mockScene } = Phaser.__mocks;
 
 function createTestTask(overrides: Partial<Task> = {}): Task {

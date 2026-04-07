@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { getDefaultContainer, Services } from '@/lib/core/services'
-import { withAuth, withRateLimit, withErrorHandling, successResponse } from '@/lib/api/route-utils'
+import { withAuth, withRateLimit, successResponse } from '@/lib/api/route-utils'
 import { ChatRequestSchema, parseRequestBody } from '@/lib/api/schemas'
 
 export const POST = withAuth(withRateLimit(async (request: NextRequest) => {

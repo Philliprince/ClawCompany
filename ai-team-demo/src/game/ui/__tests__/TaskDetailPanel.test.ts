@@ -1,62 +1,119 @@
 import { TaskDetailPanel } from '../TaskDetailPanel';
 import { Task, TaskStatus } from '../../types/Task';
 
+interface MockGraphics {
+  clear: jest.Mock;
+  fillStyle: jest.Mock;
+  fillRect: jest.Mock;
+  fillRoundedRect: jest.Mock;
+  setPosition: jest.Mock;
+  setDepth: jest.Mock;
+  setAlpha: jest.Mock;
+  destroy: jest.Mock;
+  lineStyle: jest.Mock;
+  strokeRoundedRect: jest.Mock;
+  alpha: number;
+}
+
+interface MockText {
+  setText: jest.Mock;
+  setOrigin: jest.Mock;
+  width: number;
+  height: number;
+  setPosition: jest.Mock;
+  destroy: jest.Mock;
+  setDepth: jest.Mock;
+  setFontSize: jest.Mock;
+  setColor: jest.Mock;
+  setInteractive: jest.Mock;
+  on: jest.Mock;
+}
+
+interface MockContainer {
+  x: number;
+  y: number;
+  setDepth: jest.Mock;
+  setAlpha: jest.Mock;
+  add: jest.Mock;
+  destroy: jest.Mock;
+  setPosition: jest.Mock<(x: number, y: number) => void>;
+  setScrollFactor: jest.Mock;
+  setInteractive: jest.Mock;
+  on: jest.Mock;
+  getBounds: jest.Mock<() => { contains: (x: number, y: number) => boolean }>;
+}
+
+interface MockTweens {
+  add: jest.Mock<(config: { onComplete?: () => void }) => void>;
+}
+
+interface MockScene {
+  add: {
+    container: jest.Mock<() => MockContainer>;
+    graphics: jest.Mock<() => MockGraphics>;
+    text: jest.Mock<() => MockText>;
+  };
+  time: {
+    delayedCall: jest.Mock;
+  };
+  tweens: MockTweens;
+  input: {
+    on: jest.Mock;
+    off: jest.Mock;
+  };
+}
+
+interface MockTweenConfig {
+  onComplete?: () => void;
+}
+
 jest.mock('phaser', () => {
-  const createMockGraphics = () => {
-    const g: any = {
-      clear: jest.fn(),
-      fillStyle: jest.fn(),
-      fillRect: jest.fn(),
-      fillRoundedRect: jest.fn(),
-      setPosition: jest.fn(),
-      setDepth: jest.fn(),
-      setAlpha: jest.fn(),
-      destroy: jest.fn(),
-      lineStyle: jest.fn(),
-      strokeRoundedRect: jest.fn(),
-      alpha: 0,
-    };
-    return g;
-  };
+  const createMockGraphics = (): MockGraphics => ({
+    clear: jest.fn(),
+    fillStyle: jest.fn(),
+    fillRect: jest.fn(),
+    fillRoundedRect: jest.fn(),
+    setPosition: jest.fn(),
+    setDepth: jest.fn(),
+    setAlpha: jest.fn(),
+    destroy: jest.fn(),
+    lineStyle: jest.fn(),
+    strokeRoundedRect: jest.fn(),
+    alpha: 0,
+  });
 
-  const createMockText = () => {
-    const t: any = {
-      setText: jest.fn(),
-      setOrigin: jest.fn(),
-      width: 80,
-      height: 16,
-      setPosition: jest.fn(),
-      destroy: jest.fn(),
-      setDepth: jest.fn(),
-      setFontSize: jest.fn(),
-      setColor: jest.fn(),
-      setInteractive: jest.fn(),
-      on: jest.fn(),
-    };
-    return t;
-  };
+  const createMockText = (): MockText => ({
+    setText: jest.fn(),
+    setOrigin: jest.fn(),
+    width: 80,
+    height: 16,
+    setPosition: jest.fn(),
+    destroy: jest.fn(),
+    setDepth: jest.fn(),
+    setFontSize: jest.fn(),
+    setColor: jest.fn(),
+    setInteractive: jest.fn(),
+    on: jest.fn(),
+  });
 
-  const createMockContainer = () => {
-    const c: any = {
-      x: 0,
-      y: 0,
-      setDepth: jest.fn(),
-      setAlpha: jest.fn(),
-      add: jest.fn(),
-      destroy: jest.fn(),
-      setPosition: jest.fn((x: number, y: number) => {
-        c.x = x;
-        c.y = y;
-      }),
-      setScrollFactor: jest.fn(),
-      setInteractive: jest.fn(),
-      on: jest.fn(),
-      getBounds: jest.fn().mockReturnValue({ contains: () => false }),
-    };
-    return c;
-  };
+  const createMockContainer = (): MockContainer => ({
+    x: 0,
+    y: 0,
+    setDepth: jest.fn(),
+    setAlpha: jest.fn(),
+    add: jest.fn(),
+    destroy: jest.fn(),
+    setPosition: jest.fn((x: number, y: number) => {
+      (this as MockContainer).x = x;
+      (this as MockContainer).y = y;
+    }),
+    setScrollFactor: jest.fn(),
+    setInteractive: jest.fn(),
+    on: jest.fn(),
+    getBounds: jest.fn().mockReturnValue({ contains: () => false }),
+  });
 
-  const mockScene: any = {
+  const mockScene: MockScene = {
     add: {
       container: jest.fn(() => createMockContainer()),
       graphics: jest.fn(() => createMockGraphics()),
@@ -66,10 +123,11 @@ jest.mock('phaser', () => {
       delayedCall: jest.fn(),
     },
     tweens: {
-      add: jest.fn((config: any) => {
+      add: jest.fn((config: MockTweenConfig) => {
         if (config.onComplete) {
           config.onComplete();
         }
+        return { stop: jest.fn() };
       }),
     },
     input: {
@@ -90,7 +148,20 @@ jest.mock('phaser', () => {
   };
 });
 
-const Phaser = require('phaser');
+interface PhaserMock {
+  default: {
+    GameObjects: {
+      Container: jest.Mock;
+      Graphics: jest.Mock;
+      Text: jest.Mock;
+    };
+  };
+  __mocks: {
+    mockScene: MockScene;
+  };
+}
+
+const Phaser = require('phaser') as PhaserMock;
 const { mockScene } = Phaser.__mocks;
 
 function createTestTask(overrides: Partial<Task> = {}): Task {

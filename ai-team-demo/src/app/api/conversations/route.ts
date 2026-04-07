@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 
 import { StorageManager } from '@/lib/storage/manager'
 import { InputValidator } from '@/lib/security/utils'
-import { withAuth, withRateLimit, withErrorHandling, successResponse, errorResponse } from '@/lib/api/route-utils'
+import { withAuth, withRateLimit, successResponse, errorResponse } from '@/lib/api/route-utils'
 
 const storageManager = new StorageManager()
 

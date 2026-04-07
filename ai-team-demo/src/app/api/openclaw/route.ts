@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 
-import { withAuth, withRateLimit, withErrorHandling, successResponse, errorResponse } from '@/lib/api/route-utils'
+import { withAuth, withRateLimit, successResponse, errorResponse } from '@/lib/api/route-utils'
 import { InputValidator } from '@/lib/security/utils'
 
 const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:18789'

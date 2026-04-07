@@ -93,13 +93,19 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.5 }}
-            className="flex gap-4 justify-center"
+            className="flex gap-4 justify-center flex-wrap"
           >
             <Link
               href="/team"
               className="px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:scale-105"
             >
               Start Chatting →
+            </Link>
+            <Link
+              href="/office"
+              className="px-8 py-4 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105"
+            >
+              虚拟办公室 →
             </Link>
             <Link
               href="/demo"

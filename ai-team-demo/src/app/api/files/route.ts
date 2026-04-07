@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 
 import { SandboxedFileWriter } from '@/lib/security/sandbox'
 import { InputValidator } from '@/lib/security/utils'
-import { withAuth, withRateLimit, withErrorHandling, successResponse, errorResponse } from '@/lib/api/route-utils'
+import { withAuth, withRateLimit, successResponse, errorResponse } from '@/lib/api/route-utils'
 
 const sandboxedWriter = new SandboxedFileWriter(process.cwd())
 
