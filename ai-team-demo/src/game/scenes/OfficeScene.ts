@@ -519,7 +519,8 @@ export class OfficeScene extends Phaser.Scene {
       });
     });
 
-    this.setupInterAgentCollisions();
+    // 无重力模式：移除 Agent 之间的物理碰撞，改用简单的视觉避让
+    // this.setupInterAgentCollisions();
   }
 
   private setupInterAgentCollisions(): void {
@@ -549,9 +550,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setupCollisions(): void {
-    this.agents.forEach((agent) => {
-      this.physics.add.collider(agent, this.platforms);
-    });
+    // 无重力模式：不再需要物理碰撞
+    // Agent 使用 pathfinding 系统导航，不会穿过障碍物
+    // 如果需要边界限制，可以在 Agent 的 update 中检查
   }
 
   private setupDebug(): void {

@@ -9,7 +9,7 @@ export const gameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { x: 0, y: 800 },
+      gravity: { x: 0, y: 0 },
       debug: false,
     },
   },
@@ -17,11 +17,11 @@ export const gameConfig = {
 };
 
 export const PHYSICS_CONFIG = {
-  gravity: 800,
-  jumpForce: -400,
+  gravity: 0,
+  jumpForce: 0,
   moveSpeed: 200,
   maxVelocity: 300,
-  drag: 500,
+  drag: 800,
 };
 
 export const TILE_SIZE = 32;
