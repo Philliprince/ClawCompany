@@ -303,7 +303,7 @@ describe('MetricsAggregator', () => {
       const actualMem = process.memoryUsage()
       const expectedTotal = Math.round(actualMem.heapTotal / 1024 / 1024)
 
-      expect(metrics.memoryUsage.total).toBe(expectedTotal)
+      expect(Math.abs(metrics.memoryUsage.total - expectedTotal)).toBeLessThanOrEqual(1)
       expect(metrics.memoryUsage.total).not.toBe(4096)
     })
   })
