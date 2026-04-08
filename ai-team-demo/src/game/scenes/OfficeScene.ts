@@ -6,6 +6,7 @@ import { DebugOverlay } from '../utils/DebugOverlay';
 import { MovementSystem } from '../systems/MovementSystem';
 import { AnimationController } from '../systems/AnimationController';
 import { createCharacterSprites } from '../sprites/CharacterSprites';
+import { CharacterSpriteSystem } from '../sprites/CharacterSpriteSystem';
 import { NavigationMesh } from '../data/NavigationMesh';
 import { PathfindingSystem } from '../systems/PathfindingSystem';
 import { NavigationSystem } from '../systems/NavigationSystem';
@@ -21,6 +22,7 @@ import { TargetMarker } from '../ui/TargetMarker';
 import { OfficeDecorator } from '../ui/OfficeDecorator';
 import { TaskManager } from '../systems/TaskManager';
 import { TaskHandoverSystem } from '../systems/TaskHandoverSystem';
+import { TaskFlowSystem } from '../systems/TaskFlowSystem';
 import { TaskVisualizer } from '../ui/TaskVisualizer';
 import { TaskHistoryPanel } from '../ui/TaskHistoryPanel';
 import { TaskStatisticsPanel } from '../ui/TaskStatisticsPanel';
@@ -83,9 +85,11 @@ export class OfficeScene extends Phaser.Scene {
   private eventBus!: EventBus;
   private taskManager!: TaskManager;
   private taskHandoverSystem!: TaskHandoverSystem;
+  private taskFlowSystem!: TaskFlowSystem;
   private taskVisualizer!: TaskVisualizer;
   private historyPanel!: TaskHistoryPanel;
   private statisticsPanel!: TaskStatisticsPanel;
+  private characterSpriteSystem!: CharacterSpriteSystem;
 
   private roomPositions: Record<string, { x: number; y: number }> = {
     'pm-office': { x: 350, y: 280 },
@@ -162,6 +166,8 @@ export class OfficeScene extends Phaser.Scene {
     try {
       console.log('🏢 创建虚拟办公室场景...');
       
+      // 初始化角色精灵系统
+      this.characterSpriteSystem = new CharacterSpriteSystem(this);
       this.createParticleTexture();
       this.tilemapData = this.getDefaultTilemapData();
 
@@ -211,6 +217,7 @@ export class OfficeScene extends Phaser.Scene {
       this.createNavigationMesh();
       this.createAgents();
       this.taskHandoverSystem = new TaskHandoverSystem(this.agentMap, this.eventBus);
+      this.taskFlowSystem = new TaskFlowSystem(this, this.taskManager, this.eventBus);
       this.setupCollisions();
       this.setupDebug();
       this.setupWorkstationStatus();
@@ -286,7 +293,21 @@ export class OfficeScene extends Phaser.Scene {
 
     const target = targetPositions[Math.floor(Math.random() * targetPositions.length)];
 
+    // 创建任务分配事件
+    this.eventBus.emit('task-assigned', {
+      type: 'task:assigned',
+      taskId: `${agent.agentId}_${Date.now()}`,
+      agentId: agent.agentId,
+      task: {
+        id: `${agent.agentId}_${Date.now()}`,
+        description: 'Office task',
+        taskType: this.getRandomTaskType(),
+      },
+      timestamp: Date.now()
+    });
+
     agent.moveTo(target.x, target.y);
+    agent.setWorking(true);
 
     this.soundSystem.play('task-assigned');
 
@@ -296,6 +317,34 @@ export class OfficeScene extends Phaser.Scene {
       targetY: target.y,
       returning: false,
     });
+
+    // 启动任务进度
+    this.eventBus.emit('task-started', {
+      taskId: `${agent.agentId}_${Date.now()}`,
+      agentId: agent.agentId,
+      taskType: this.getRandomTaskType()
+    });
+  }
+
+  private getRandomTaskType(): string {
+    const taskTypes = ['coding', 'testing', 'meeting', 'review', 'design', 'debug', 'deploy', 'plan'];
+    return taskTypes[Math.floor(Math.random() * taskTypes.length)];
+  }
+
+  private simulateTaskProgress(agentId: string): void {
+    const progressInterval = setInterval(() => {
+      const agent = this.agentMap.get(agentId);
+      if (!agent || !agent.isWorkingState()) {
+        clearInterval(progressInterval);
+        return;
+      }
+
+      this.eventBus.emit('task-progress', {
+        taskId: `${agentId}_${Date.now()}`,
+        agentId: agentId,
+        progress: Math.random()
+      });
+    }, 1000);
   }
 
   private checkTaskCompletion(): void {
@@ -320,6 +369,18 @@ export class OfficeScene extends Phaser.Scene {
               if (t) {
                 t.returning = true;
                 agent.returnToOriginal();
+                
+                // 发送任务完成事件
+                this.eventBus.emit('task-completed', {
+                  type: 'task:completed',
+                  taskId: `${agentId}_${Date.now()}`,
+                  agentId: agentId,
+                  result: 'success',
+                  duration: 5000,
+                  timestamp: Date.now()
+                });
+                
+                agent.setWorking(false);
               }
             });
           }
@@ -440,12 +501,8 @@ export class OfficeScene extends Phaser.Scene {
   private createPlatforms(): void {
     if (!this.tilemapData) return;
 
-    const platformColors: Record<string, { fill: number; border: number; highlight: number }> = {
-      floor: { fill: 0x555555, border: 0x444444, highlight: 0x666666 },
-      wall_left: { fill: 0x3a3a3a, border: 0x2a2a2a, highlight: 0x4a4a4a },
-      wall_right: { fill: 0x3a3a3a, border: 0x2a2a2a, highlight: 0x4a4a4a },
-      desk: { fill: 0x5c3a1e, border: 0x3a2210, highlight: 0x7a4f2e },
-    };
+    // 使用角色精灵系统获取办公室资产
+    const spriteSystem = this.characterSpriteSystem;
 
     this.tilemapData.platforms.forEach((platform) => {
       const x = platform.x * TILE_SIZE + (platform.width * TILE_SIZE) / 2;
@@ -453,21 +510,56 @@ export class OfficeScene extends Phaser.Scene {
       const width = platform.width * TILE_SIZE;
       const height = Math.max(platform.height * TILE_SIZE, 4);
 
-      const colors = platformColors[platform.type] || platformColors.floor;
-      const graphics = this.add.graphics();
-      graphics.fillStyle(colors.fill, 1);
-      graphics.fillRect(-width / 2, -height / 2, width, height);
-      graphics.fillStyle(colors.highlight, 0.3);
-      graphics.fillRect(-width / 2, -height / 2, width, Math.max(2, height * 0.3));
-      graphics.lineStyle(1, colors.border, 0.5);
-      graphics.strokeRect(-width / 2, -height / 2, width, height);
-      graphics.generateTexture(`platform_${platform.type}`, width, height);
-      graphics.destroy();
+      let assetType = 'floor';
+      if (platform.type === 'desk') {
+        assetType = 'desk';
+      } else if (platform.type.includes('wall')) {
+        assetType = 'wall';
+      }
 
-      const platformSprite = this.platforms.create(x, y, `platform_${platform.type}`);
+      const assetKey = spriteSystem.getOfficeAsset(assetType);
+      
+      // 创建平台精灵
+      const platformSprite = this.platforms.create(x, y, assetKey);
       platformSprite.setOrigin(0.5, 0.5);
+      
+      // 根据平台类型调整大小
+      if (assetType === 'desk') {
+        platformSprite.setDisplaySize(width, height);
+      } else {
+        platformSprite.setDisplaySize(width, height);
+      }
+      
       platformSprite.refreshBody();
+
+      // 添加平台装饰
+      this.addPlatformDecoration(platform, x, y, width, height);
     });
+  }
+
+  private addPlatformDecoration(platform: any, x: number, y: number, width: number, height: number): void {
+    // 为平台添加装饰效果
+    if (platform.type === 'desk') {
+      // 添加桌面装饰
+      const decoration = this.add.graphics();
+      decoration.fillStyle(0x8B4513, 0.3);
+      decoration.fillRect(-width / 2 + 4, -height / 2 + 4, width - 8, height - 8);
+      decoration.lineStyle(2, 0x654321, 0.5);
+      decoration.strokeRect(-width / 2 + 4, -height / 2 + 4, width - 8, height - 8);
+      decoration.setPosition(x, y);
+      decoration.setDepth(1);
+      this.decorationGraphics.push(decoration);
+    } else if (platform.type.includes('wall')) {
+      // 添加墙壁装饰
+      const decoration = this.add.graphics();
+      decoration.fillStyle(0xFFFFFF, 0.1);
+      decoration.fillRect(-width / 2 + 2, -height / 2 + 2, width - 4, height - 4);
+      decoration.lineStyle(1, 0xDDDDDD, 0.3);
+      decoration.strokeRect(-width / 2 + 2, -height / 2 + 2, width - 4, height - 4);
+      decoration.setPosition(x, y);
+      decoration.setDepth(1);
+      this.decorationGraphics.push(decoration);
+    }
   }
 
   private createAgents(): void {
@@ -479,11 +571,16 @@ export class OfficeScene extends Phaser.Scene {
       const color = agentColors[index % agentColors.length];
       const config = AGENT_CONFIGS[index] ?? { id: ws.id, name: ws.label, role: ws.taskType };
       const badgeConfig = this.roleVisuals.getNameBadgeConfig(config.role);
-      createCharacterSprites(this, color);
+      
+      // 使用新的角色精灵系统
+      const spriteSystem = this.characterSpriteSystem;
+      const characterSprite = spriteSystem.getCharacterSprite(config.role);
 
       const x = ws.x * TILE_SIZE + TILE_SIZE / 2;
       const y = (ws.y - 1) * TILE_SIZE;
-      const agent = createAgent(this, x, y, color, config);
+      
+      // 使用增强的角色创建方法
+      const agent = this.createEnhancedAgent(x, y, color, config, characterSprite);
 
       const controller = new AnimationController(agent, color);
       agent.setAnimationController(controller);
@@ -494,7 +591,7 @@ export class OfficeScene extends Phaser.Scene {
       this.agentMap.set(agent.agentId, agent);
       this.workstationMap.set(ws.id, ws);
 
-      const nameLabel = this.add.text(x, y + 20, config.name, {
+      const nameLabel = this.add.text(x, y + 24, config.name, {
         fontSize: `${badgeConfig.fontSize}px`,
         color: badgeConfig.textColor,
         backgroundColor: `#${badgeConfig.bgColor.toString(16).padStart(6, '0')}`,
@@ -504,13 +601,17 @@ export class OfficeScene extends Phaser.Scene {
       nameLabel.setStroke(`#${badgeConfig.borderColor.toString(16).padStart(6, '0')}`, 1);
       this.nameLabels.set(agent.agentId, nameLabel);
 
-      const shadowDims = this.shadowRenderer.getShadowDimensions(32, 32);
+      // 创建增强的阴影
+      const shadowDims = this.shadowRenderer.getShadowDimensions(64, 64);
       const shadowGfx = this.add.graphics();
       const shadowColor = this.shadowRenderer.getShadowColor();
       shadowGfx.fillStyle(shadowColor.color, shadowColor.alpha);
       shadowGfx.fillEllipse(0, 0, shadowDims.width, shadowDims.height);
       shadowGfx.setPosition(agent.x, agent.y + shadowDims.offsetY);
       this.shadowGraphics.set(agent.agentId, shadowGfx);
+
+      // 添加角色特效标识
+      this.addRoleIndicator(agent, config.role);
 
       this.memoryManager.track({
         type: 'text-label',
@@ -519,8 +620,112 @@ export class OfficeScene extends Phaser.Scene {
       });
     });
 
-    // 无重力模式：移除 Agent 之间的物理碰撞，改用简单的视觉避让
-    // this.setupInterAgentCollisions();
+    // 创建角色间互动
+    this.createAgentInteractions();
+  }
+
+  private createEnhancedAgent(x: number, y: number, color: number, config: AgentConfig, characterSprite: string): AgentCharacter {
+    // 使用角色精灵创建增强的角色
+    const agent = new AgentCharacter(this, x, y, characterSprite, undefined, color, config);
+    
+    // 设置角色大小（64x64）
+    agent.setDisplaySize(64, 64);
+    agent.setOrigin(0.5, 1);
+    
+    // 设置物理属性
+    agent.setCollideWorldBounds(true);
+    agent.setBounce(0);
+    agent.setDrag(800, 800);
+    
+    // 设置初始位置
+    agent.setPosition(x, y);
+    
+    return agent;
+  }
+
+  private addRoleIndicator(agent: AgentCharacter, role: string): void {
+    // 为角色添加角色标识
+    let indicator = '';
+    switch (role.toLowerCase()) {
+      case 'project manager':
+      case 'pm':
+        indicator = '👔';
+        break;
+      case 'developer':
+      case 'dev':
+        indicator = '💻';
+        break;
+      case 'tester':
+        indicator = '🔍';
+        break;
+      case 'reviewer':
+        indicator = '📋';
+        break;
+      default:
+        indicator = '👤';
+    }
+    
+    const roleIndicator = this.add.text(agent.x, agent.y - 40, indicator, {
+      fontSize: '20px',
+    });
+    roleIndicator.setOrigin(0.5);
+    roleIndicator.setDepth(agent.depth + 2);
+    
+    // 保存引用以便更新位置
+    (agent as any).roleIndicator = roleIndicator;
+  }
+
+  private createAgentInteractions(): void {
+    // 创建角色间的互动效果
+    this.time.addEvent({
+      delay: 10000, // 每10秒检查一次
+      callback: () => {
+        this.checkAgentProximity();
+      },
+      loop: true,
+    });
+  }
+
+  private checkAgentProximity(): void {
+    for (let i = 0; i < this.agents.length; i++) {
+      for (let j = i + 1; j < this.agents.length; j++) {
+        const agent1 = this.agents[i];
+        const agent2 = this.agents[j];
+        
+        const distance = Phaser.Math.Distance.Between(agent1.x, agent1.y, agent2.x, agent2.y);
+        
+        if (distance < 80) {
+          // 角色靠近时的互动效果
+          this.createProximityEffect(agent1, agent2);
+        }
+      }
+    }
+  }
+
+  private createProximityEffect(agent1: AgentCharacter, agent2: AgentCharacter): void {
+    // 创建靠近时的特效
+    const midX = (agent1.x + agent2.x) / 2;
+    const midY = (agent1.y + agent2.y) / 2;
+    
+    const interactionGraphics = this.add.graphics();
+    interactionGraphics.fillStyle(0x00ff00, 0.3);
+    interactionGraphics.fillCircle(0, 0, 20);
+    interactionGraphics.setPosition(midX, midY);
+    interactionGraphics.setDepth(100);
+
+    // 添加动画效果
+    this.tweens.add({
+      targets: interactionGraphics,
+      alpha: 0,
+      scale: 2,
+      duration: 1000,
+      onComplete: () => {
+        interactionGraphics.destroy();
+      }
+    });
+    
+    // 播放互动音效
+    this.soundSystem.play('interaction');
   }
 
   private setupInterAgentCollisions(): void {
@@ -736,6 +941,7 @@ export class OfficeScene extends Phaser.Scene {
     this.taskVisualizer.update();
     this.historyPanel.update();
     this.statisticsPanel.update();
+    this.taskFlowSystem.update();
     this.movementSystem.update();
     this.debugOverlay.update(this.agents);
     this.checkTaskCompletion();
@@ -754,8 +960,15 @@ export class OfficeScene extends Phaser.Scene {
     this.nameLabels.forEach((label, agentId) => {
       const agent = this.agentMap.get(agentId);
       if (agent) {
-        label.setPosition(agent.x, agent.y + 24);
+        label.setPosition(agent.x, agent.y + 32);
         label.setDepth(agent.depth + 1);
+        
+        // 更新角色指示器位置
+        const roleIndicator = (agent as any).roleIndicator;
+        if (roleIndicator) {
+          roleIndicator.setPosition(agent.x, agent.y - 40);
+          roleIndicator.setDepth(agent.depth + 2);
+        }
       }
     });
   }
@@ -794,6 +1007,10 @@ export class OfficeScene extends Phaser.Scene {
 
   getTaskHandoverSystem(): TaskHandoverSystem {
     return this.taskHandoverSystem;
+  }
+
+  getTaskFlowSystem(): TaskFlowSystem {
+    return this.taskFlowSystem;
   }
 
   private createDecorations(): void {
@@ -939,6 +1156,7 @@ export class OfficeScene extends Phaser.Scene {
     this.soundSystem.stopAll();
     this.soundSystem.destroy();
     this.officeDecorator.destroy();
+    this.taskFlowSystem.destroy();
     this.taskVisualizer.destroy();
     this.historyPanel.destroy();
     this.statisticsPanel.destroy();
@@ -956,6 +1174,14 @@ export class OfficeScene extends Phaser.Scene {
     this.activeTasks.clear();
     this.agents = [];
     this.agentMap.clear();
+    
+    // 清理角色指示器
+    this.agents.forEach(agent => {
+      const roleIndicator = (agent as any).roleIndicator;
+      if (roleIndicator) {
+        roleIndicator.destroy();
+      }
+    });
   }
 
   getSoundSystem(): SoundSystem {

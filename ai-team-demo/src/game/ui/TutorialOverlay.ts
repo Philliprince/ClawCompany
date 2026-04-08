@@ -198,12 +198,12 @@ export class TutorialOverlay {
     // 设置高亮
     this.setupHighlight();
 
-    // 自动推进定时器
+    // 自动推进定时器（15秒，给用户足够时间阅读）
     if (this.autoAdvanceTimer) {
       this.autoAdvanceTimer.remove();
     }
     this.autoAdvanceTimer = this.scene.time.addEvent({
-      delay: 8000,
+      delay: 15000,
       callback: () => {
         this.nextStep();
       },

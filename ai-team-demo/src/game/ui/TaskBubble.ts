@@ -66,6 +66,8 @@ export class TaskBubble {
       fontSize: FONT_SIZE,
       color: '#ffffff',
       fontFamily: 'Arial',
+      stroke: '#000000',
+      strokeThickness: 1,
     });
     this.text.setOrigin(0.5);
 
@@ -203,9 +205,7 @@ export class TaskBubble {
       8
     );
 
-    // 绘制文本
+    // 绘制文本 - 样式已在创建时设置
     this.text.setPosition(0, 0);
-    this.text.setFontSize(FONT_SIZE);
-    this.text.setStroke('#000000', 1);
   }
 }

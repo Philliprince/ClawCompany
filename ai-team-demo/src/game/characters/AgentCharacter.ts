@@ -9,6 +9,13 @@ import type { AgentConfig } from '../../types/agent-config';
 
 type NavigationState = 'idle' | 'moving' | 'jumping' | 'arrived';
 
+// 扩展AgentCharacter类以包含emoji属性
+declare module './AgentCharacter' {
+  interface AgentCharacter {
+    emojiText?: Phaser.GameObjects.Text;
+  }
+}
+
 export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   private isOnFloor: boolean = false;
   private animationController!: AnimationController;
@@ -92,7 +99,8 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   private updateEmojiPosition(): void {
     const emojiText = (this as any).emojiText;
     if (emojiText) {
-      emojiText.setPosition(this.x, this.y - 32);
+      const size = 64;
+      emojiText.setPosition(this.x, this.y - size / 2);
     }
   }
 
@@ -154,8 +162,10 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
     }
 
     // 无重力模式：直接沿路径移动，不需要跳跃
-    const directionX = dx / distance || 0;
-    const directionY = dy / distance || 0;
+    const minDistance = 0.001; // 避免除零的最小距离
+    const safeDistance = Math.max(distance, minDistance);
+    const directionX = dx / safeDistance;
+    const directionY = dy / safeDistance;
     this.setVelocityX(directionX * PHYSICS_CONFIG.moveSpeed);
     this.setVelocityY(directionY * PHYSICS_CONFIG.moveSpeed);
   }

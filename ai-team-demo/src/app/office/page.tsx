@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { PerformanceMonitor } from "@/game/systems/PerformanceMonitor";
+import { EnhancedPerformancePanel } from "@/components/EnhancedPerformancePanel";
 
 import { Game } from "@/game";
 
@@ -17,6 +18,7 @@ export default function OfficePage() {
     agents: number;
   } | null>(null);
   const [showPerformanceDetail, setShowPerformanceDetail] = useState(false);
+  const [showEnhancedPanel, setShowEnhancedPanel] = useState(false);
 
   const updatePerformanceStats = useCallback(() => {
     if (gameRef.current && gameRef.current.getPerformanceMonitor) {
@@ -57,8 +59,19 @@ export default function OfficePage() {
 
     const performanceInterval = setInterval(updatePerformanceStats, 2000);
 
+    // 添加键盘快捷键监听
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.shiftKey && event.key === 'P') {
+        event.preventDefault();
+        setShowEnhancedPanel(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+
     return () => {
       clearInterval(performanceInterval);
+      window.removeEventListener('keydown', handleKeyPress);
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
@@ -151,6 +164,16 @@ export default function OfficePage() {
               </div>
             )}
           </div>
+          
+          {/* 增强性能监控面板 */}
+          {gameRef.current && showEnhancedPanel && (
+            <EnhancedPerformancePanel
+              monitor={gameRef.current.getPerformanceMonitor()}
+              isVisible={showEnhancedPanel}
+              onClose={() => setShowEnhancedPanel(false)}
+            />
+          )}
+          
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-gray-300 text-sm font-medium">
@@ -184,6 +207,10 @@ export default function OfficePage() {
                   <div className="flex justify-between">
                     <span>P</span>
                     <span>性能监控</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Shift+P</span>
+                    <span>详细性能</span>
                   </div>
                 </div>
               </details>

@@ -250,7 +250,7 @@ export class VirtualJoystick {
   }
 
   private vibrate(): void {
-    if (navigator.vibrate && typeof navigator.vibrate === 'function') {
+    if (typeof navigator !== 'undefined' && navigator.vibrate && typeof navigator.vibrate === 'function') {
       navigator.vibrate(50);
     }
   }

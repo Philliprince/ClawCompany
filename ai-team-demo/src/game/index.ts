@@ -11,12 +11,12 @@ export class Game extends Phaser.Game {
 
   getPerformanceMonitor(): PerformanceMonitor | null {
     const scene = this.scene.getScene('OfficeScene');
-    return (scene as any)?.performanceMonitor || null;
+    return (scene as { performanceMonitor?: PerformanceMonitor })?.performanceMonitor || null;
   }
 
   getAgents(): any[] {
     const scene = this.scene.getScene('OfficeScene');
-    return (scene as any)?.getAgents() || [];
+    return (scene as { getAgents?: () => any[] })?.getAgents?.() || [];
   }
 
   destroy(destroyChildren?: boolean): void {
