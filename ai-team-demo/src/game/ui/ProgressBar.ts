@@ -1,8 +1,9 @@
 import * as Phaser from 'phaser';
 
-const BAR_WIDTH = 60;
-const BAR_HEIGHT = 4;
-const BG_COLOR = 0x374151;
+const BAR_WIDTH = 80;
+const BAR_HEIGHT = 6;
+const BG_COLOR = 0x1F2937;
+const BORDER_COLOR = 0x4B5563;
 
 const PROGRESS_COLORS = [
   { threshold: 30, color: 0xEF4444 },
@@ -94,13 +95,21 @@ export class ProgressBar {
 
   private redraw(): void {
     this.graphics.clear();
+    
+    this.graphics.lineStyle(1, BORDER_COLOR, 1);
+    this.graphics.strokeRoundedRect(-BAR_WIDTH / 2 - 1, -BAR_HEIGHT / 2 - 1, BAR_WIDTH + 2, BAR_HEIGHT + 2, 3);
 
     this.graphics.fillStyle(BG_COLOR, 1);
-    this.graphics.fillRect(-BAR_WIDTH / 2, -BAR_HEIGHT / 2, BAR_WIDTH, BAR_HEIGHT);
+    this.graphics.fillRoundedRect(-BAR_WIDTH / 2, -BAR_HEIGHT / 2, BAR_WIDTH, BAR_HEIGHT, 2);
 
     const fillWidth = (this.displayedProgress / 100) * BAR_WIDTH;
     const color = this.getProgressColor();
     this.graphics.fillStyle(color, 1);
-    this.graphics.fillRect(-BAR_WIDTH / 2, -BAR_HEIGHT / 2, fillWidth, BAR_HEIGHT);
+    this.graphics.fillRoundedRect(-BAR_WIDTH / 2, -BAR_HEIGHT / 2, fillWidth, BAR_HEIGHT, 2);
+    
+    if (fillWidth > 4) {
+      this.graphics.fillStyle(0xffffff, 0.3);
+      this.graphics.fillRect(-BAR_WIDTH / 2, -BAR_HEIGHT / 2, fillWidth, BAR_HEIGHT / 3);
+    }
   }
 }

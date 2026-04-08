@@ -85,12 +85,11 @@ export default function OfficePage() {
         <h1 className="text-xl font-bold gradient-text">虚拟办公室 - Phaser 3</h1>
       </header>
       <main className="flex-1 flex items-center justify-center p-4">
-        <div className="glass rounded-2xl p-4 border border-dark-100 w-full max-w-4xl">
-          <div className="relative rounded-xl overflow-hidden w-full"
+          <div className="glass rounded-2xl p-2 sm:p-4 border border-dark-100 w-full max-w-4xl">
+            <div className="relative rounded-xl overflow-hidden w-full"
             style={{ 
               aspectRatio: '4/3',
               maxWidth: '800px',
-              maxHeight: '600px',
               margin: '0 auto'
             }}
           >
@@ -216,7 +215,7 @@ export default function OfficePage() {
               </details>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-400">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-400">
               <div className="flex items-center justify-center gap-1">
                 <kbd className="px-2 py-1 bg-gray-700 rounded text-xs">WASD</kbd>
                 <span>移动</span>

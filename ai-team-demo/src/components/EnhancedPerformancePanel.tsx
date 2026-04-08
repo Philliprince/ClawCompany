@@ -24,7 +24,9 @@ export function EnhancedPerformancePanel({
   const [stats, setStats] = useState<FrameStats | null>(null);
   const [history, setHistory] = useState<PerformanceHistory[]>([]);
   const [alerts, setAlerts] = useState<string[]>([]);
-  const [maxHistoryLength] = useState(60); // 显示最近60个数据点
+  const [maxHistoryLength] = useState(60);
+  const [expandedSection, setExpandedSection] = useState<string | null>('fps');
+  const [isAutoRefresh, setIsAutoRefresh] = useState(true); // 显示最近60个数据点
 
   const updateStats = useCallback(() => {
     if (!monitor) return;
@@ -63,9 +65,39 @@ export function EnhancedPerformancePanel({
   useEffect(() => {
     if (!isVisible || !monitor) return;
 
-    const interval = setInterval(updateStats, 1000);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'r' || e.key === 'R') {
+        if (!isAutoRefresh) {
+          updateStats();
+        }
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setIsAutoRefresh(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isVisible, monitor, updateStats, onClose, isAutoRefresh]);
+
+  useEffect(() => {
+    if (!isVisible || !monitor) return;
+
+    const interval = setInterval(() => {
+      if (isAutoRefresh) {
+        updateStats();
+      }
+    }, 1000);
     return () => clearInterval(interval);
-  }, [isVisible, monitor, updateStats]);
+  }, [isVisible, monitor, updateStats, isAutoRefresh]);
+
+  const handleManualRefresh = useCallback(() => {
+    if (!isAutoRefresh) {
+      updateStats();
+    }
+  }, [isAutoRefresh, updateStats]);
 
   const getFPSColor = (fps: number) => {
     if (fps >= 55) return "text-green-400";
@@ -127,8 +159,14 @@ export function EnhancedPerformancePanel({
 
         {/* 实时指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">当前 FPS</div>
+          <div 
+            className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors"
+            onClick={() => setExpandedSection(expandedSection === 'currentFps' ? null : 'currentFps')}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-gray-400 text-sm">当前 FPS</div>
+              <span className="text-gray-500 text-xs">{expandedSection === 'currentFps' ? '▲' : '▼'}</span>
+            </div>
             <div className={`text-2xl font-bold ${getFPSColor(stats.currentFPS)}`}>
               {stats.currentFPS.toFixed(0)}
             </div>
@@ -137,8 +175,14 @@ export function EnhancedPerformancePanel({
             </div>
           </div>
           
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">平均 FPS</div>
+          <div 
+            className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors"
+            onClick={() => setExpandedSection(expandedSection === 'avgFps' ? null : 'avgFps')}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-gray-400 text-sm">平均 FPS</div>
+              <span className="text-gray-500 text-xs">{expandedSection === 'avgFps' ? '▲' : '▼'}</span>
+            </div>
             <div className={`text-2xl font-bold ${getFPSColor(stats.averageFPS)}`}>
               {stats.averageFPS.toFixed(0)}
             </div>
@@ -147,8 +191,14 @@ export function EnhancedPerformancePanel({
             </div>
           </div>
           
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">帧时间</div>
+          <div 
+            className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors"
+            onClick={() => setExpandedSection(expandedSection === 'frameTime' ? null : 'frameTime')}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-gray-400 text-sm">帧时间</div>
+              <span className="text-gray-500 text-xs">{expandedSection === 'frameTime' ? '▲' : '▼'}</span>
+            </div>
             <div className={`text-2xl font-bold ${getFrameTimeColor(stats.avgFrameTime)}`}>
               {stats.avgFrameTime.toFixed(1)}ms
             </div>
@@ -157,8 +207,14 @@ export function EnhancedPerformancePanel({
             </div>
           </div>
           
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">内存使用</div>
+          <div 
+            className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors"
+            onClick={() => setExpandedSection(expandedSection === 'memory' ? null : 'memory')}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-gray-400 text-sm">内存使用</div>
+              <span className="text-gray-500 text-xs">{expandedSection === 'memory' ? '▲' : '▼'}</span>
+            </div>
             <div className="text-2xl font-bold text-purple-400">
               {((monitor?.getMemoryUsage?.() || 0) / 1024 / 1024 || 0).toFixed(1)}MB
             </div>
@@ -166,6 +222,31 @@ export function EnhancedPerformancePanel({
               峰值: {(Math.max(...history.map(h => h.memory), 0) / 1024 / 1024 || 0).toFixed(1)}MB
             </div>
           </div>
+        </div>
+
+        {/* 自动刷新开关 */}
+        <div className="flex items-center justify-between mb-4 bg-gray-800 rounded-lg px-4 py-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-300">自动刷新</span>
+            <button
+              onClick={() => setIsAutoRefresh(!isAutoRefresh)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                isAutoRefresh ? 'bg-primary-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isAutoRefresh ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <button
+            onClick={handleManualRefresh}
+            className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
+          >
+            立即刷新
+          </button>
         </div>
 
         {/* 预警信息 */}

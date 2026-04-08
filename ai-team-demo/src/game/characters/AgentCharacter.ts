@@ -34,6 +34,14 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   private emotionSystem: EmotionSystem;
   private emotionBubble: Phaser.GameObjects.Container | null = null;
   readonly agentConfig: AgentConfig;
+  
+  private lastVelocityX: number = 0;
+  private lastVelocityY: number = 0;
+  private squashTween: Phaser.Tweens.Tween | null = null;
+  private wobbleTween: Phaser.Tweens.Tween | null = null;
+  private bounceTween: Phaser.Tweens.Tween | null = null;
+  private isMoving: boolean = false;
+  private moveSpeed: number = 200;
 
   constructor(
     scene: Phaser.Scene,
@@ -75,15 +83,27 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   }
 
   update(): void {
+    const velocityX = this.body?.velocity.x || 0;
+    const velocityY = this.body?.velocity.y || 0;
+    
+    const isMovingNow = Math.abs(velocityX) > 10 || Math.abs(velocityY) > 10;
+    
+    if (isMovingNow && !this.isMoving) {
+      this.playMoveStartAnimation();
+    } else if (!isMovingNow && this.isMoving) {
+      this.playMoveEndAnimation();
+    }
+    this.isMoving = isMovingNow;
+    
+    if (isMovingNow) {
+      this.updateMovementAnimation(velocityX, velocityY);
+    }
+
     if (this.animationController) {
-      const velocityX = this.body?.velocity.x || 0;
-      const velocityY = this.body?.velocity.y || 0;
-      // 无重力模式：速度为 0 时为 idle
-      const isMoving = Math.abs(velocityX) > 10 || Math.abs(velocityY) > 10;
       this.animationController.update(
         velocityX,
         velocityY,
-        true, // 在无重力模式下始终视为在地面
+        true,
         this.isWorking
       );
     }
@@ -94,6 +114,71 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
     if (this.isNavigating) {
       this.updateNavigation();
     }
+  }
+  
+  private updateMovementAnimation(velocityX: number, velocityY: number): void {
+    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+    const stretchAmount = Math.min(speed / this.moveSpeed * 0.15, 0.15);
+    
+    if (Math.abs(velocityX) > Math.abs(velocityY)) {
+      this.setScale(1 + stretchAmount, 1 - stretchAmount * 0.5);
+    } else {
+      this.setScale(1 - stretchAmount * 0.5, 1 + stretchAmount);
+    }
+    
+    if (!this.bounceTween) {
+      this.bounceTween = this.scene.tweens.add({
+        targets: this,
+        scaleY: '+=0.02',
+        duration: 150,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+  }
+  
+  private playMoveStartAnimation(): void {
+    this.squashTween?.destroy();
+    this.squashTween = this.scene.tweens.add({
+      targets: this,
+      scaleX: 0.8,
+      scaleY: 1.2,
+      duration: 80,
+      ease: 'Quad.out',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: this,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 100,
+          ease: 'Elastic.out',
+        });
+      },
+    });
+  }
+  
+  private playMoveEndAnimation(): void {
+    this.squashTween?.destroy();
+    this.bounceTween?.destroy();
+    this.bounceTween = null;
+    
+    this.squashTween = this.scene.tweens.add({
+      targets: this,
+      scaleX: 1.1,
+      scaleY: 0.9,
+      duration: 80,
+      ease: 'Quad.out',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: this,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 120,
+          ease: 'Elastic.out',
+        });
+      },
+    });
   }
 
   private updateEmojiPosition(): void {
@@ -161,13 +246,19 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    // 无重力模式：直接沿路径移动，不需要跳跃
-    const minDistance = 0.001; // 避免除零的最小距离
+    const minDistance = 0.001;
     const safeDistance = Math.max(distance, minDistance);
     const directionX = dx / safeDistance;
     const directionY = dy / safeDistance;
-    this.setVelocityX(directionX * PHYSICS_CONFIG.moveSpeed);
-    this.setVelocityY(directionY * PHYSICS_CONFIG.moveSpeed);
+    
+    const targetVelX = directionX * PHYSICS_CONFIG.moveSpeed;
+    const targetVelY = directionY * PHYSICS_CONFIG.moveSpeed;
+    
+    const smoothing = 0.15;
+    const currentVelX = this.body?.velocity.x || 0;
+    const currentVelY = this.body?.velocity.y || 0;
+    this.setVelocityX(currentVelX + (targetVelX - currentVelX) * smoothing);
+    this.setVelocityY(currentVelY + (targetVelY - currentVelY) * smoothing);
   }
 
   private completeNavigation(): void {

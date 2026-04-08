@@ -32,13 +32,13 @@ const DEFAULT_TEXT: Record<TaskStatus, string> = {
   failed: 'Failed',
 };
 
-const MIN_WIDTH = 90;
-const MAX_WIDTH = 180;
-const BUBBLE_HEIGHT = 32;
-const PADDING = 16;
-const FONT_SIZE = '14px';
+const MIN_WIDTH = 100;
+const MAX_WIDTH = 200;
+const BUBBLE_HEIGHT = 36;
+const PADDING = 20;
+const FONT_SIZE = '13px';
 const FADE_DURATION = 200;
-const PRIORITY_INDICATOR_SIZE = 8;
+const PRIORITY_INDICATOR_SIZE = 10;
 
 export class TaskBubble {
   private scene: Phaser.Scene;
@@ -175,37 +175,37 @@ export class TaskBubble {
     const textWidth = this.text.width;
     const bubbleWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, textWidth + PADDING * 2));
 
-    // 绘制优先级指示器
     const priorityColor = this.getBorderColor();
+    
     this.borderGraphics.fillStyle(priorityColor, 1);
-    this.borderGraphics.fillRect(
-      -bubbleWidth / 2 + 4,
-      -BUBBLE_HEIGHT / 2 + 4,
-      PRIORITY_INDICATOR_SIZE,
+    this.borderGraphics.fillCircle(
+      -bubbleWidth / 2 + PRIORITY_INDICATOR_SIZE / 2 + 6,
+      -BUBBLE_HEIGHT / 2 + PRIORITY_INDICATOR_SIZE / 2 + 6,
       PRIORITY_INDICATOR_SIZE
     );
 
-    // 绘制边框
-    this.borderGraphics.lineStyle(2, priorityColor, 1);
+    this.borderGraphics.lineStyle(3, priorityColor, 1);
     this.borderGraphics.strokeRoundedRect(
       -bubbleWidth / 2,
       -BUBBLE_HEIGHT / 2,
       bubbleWidth,
       BUBBLE_HEIGHT,
-      8
+      10
     );
 
-    // 绘制背景
     this.background.fillStyle(color, 1);
     this.background.fillRoundedRect(
       -bubbleWidth / 2,
       -BUBBLE_HEIGHT / 2,
       bubbleWidth,
       BUBBLE_HEIGHT,
-      8
+      10
     );
 
-    // 绘制文本 - 样式已在创建时设置
-    this.text.setPosition(0, 0);
+    this.text.setPosition(0, 1);
+    
+    this.text.setFontSize(FONT_SIZE);
+    this.text.setColor('#ffffff');
+    this.text.setStroke('#000000', 2);
   }
 }
