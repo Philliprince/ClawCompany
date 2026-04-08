@@ -39,6 +39,8 @@ export class TutorialOverlay {
   private descriptionText: Phaser.GameObjects.Text;
   private stepIndicator: Phaser.GameObjects.Text;
   private skipButton: Phaser.GameObjects.Text;
+  private nextButton: Phaser.GameObjects.Text;
+  private prevButton: Phaser.GameObjects.Text;
   private highlightGraphics: Phaser.GameObjects.Graphics;
   private currentStep: number = 0;
   private highlightTween: Phaser.Tweens.Tween | null = null;
@@ -83,9 +85,20 @@ export class TutorialOverlay {
       color: '#ff6b6b',
       fontFamily: 'Arial',
     });
+    this.nextButton = scene.add.text(0, 0, '下一步 →', {
+      fontSize: '14px',
+      color: '#4ecdc4',
+      fontFamily: 'Arial',
+    });
+    this.prevButton = scene.add.text(0, 0, '← 上一步', {
+      fontSize: '14px',
+      color: '#b0b0b0',
+      fontFamily: 'Arial',
+    });
 
     this.setupPanel();
     this.setupSkipButton();
+    this.setupNavigationButtons();
     this.updateContent();
 
     this.container.add([this.background, this.panel]);
@@ -144,6 +157,32 @@ export class TutorialOverlay {
     }
   }
 
+  private setupNavigationButtons(): void {
+    this.nextButton.setInteractive();
+    this.nextButton.on('pointerdown', () => {
+      this.nextStep();
+    });
+    this.nextButton.on('pointerover', () => {
+      this.nextButton.setColor('#7eddd6');
+    });
+    this.nextButton.on('pointerout', () => {
+      this.nextButton.setColor('#4ecdc4');
+    });
+
+    this.prevButton.setInteractive();
+    this.prevButton.on('pointerdown', () => {
+      this.previousStep();
+    });
+    this.prevButton.on('pointerover', () => {
+      this.prevButton.setColor('#d0d0d0');
+    });
+    this.prevButton.on('pointerout', () => {
+      this.prevButton.setColor('#b0b0b0');
+    });
+
+    this.panel.add([this.nextButton, this.prevButton]);
+  }
+
   show(): void {
     this.container.setVisible(true);
     this.currentStep = 0;
@@ -194,6 +233,17 @@ export class TutorialOverlay {
     if (this.config.skipButton) {
       this.skipButton.setPosition(150, 80);
     }
+
+    // 更新导航按钮位置
+    const isLastStep = this.currentStep >= this.config.steps.length - 1;
+    const isFirstStep = this.currentStep === 0;
+
+    this.nextButton.setText(isLastStep ? '完成 ✓' : '下一步 →');
+    this.nextButton.setPosition(80, 80);
+    this.nextButton.setAlpha(1);
+
+    this.prevButton.setPosition(-150, 80);
+    this.prevButton.setAlpha(isFirstStep ? 0.3 : 1);
 
     // 设置高亮
     this.setupHighlight();
@@ -305,6 +355,8 @@ export class TutorialOverlay {
     this.hide();
     this.container.destroy();
     this.highlightGraphics.destroy();
+    this.nextButton.destroy();
+    this.prevButton.destroy();
     if (this.highlightTween) {
       this.highlightTween.destroy();
     }

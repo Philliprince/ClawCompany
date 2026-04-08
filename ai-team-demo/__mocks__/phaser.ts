@@ -43,6 +43,10 @@ const TextClass = class {
   constructor(scene: any, x: number, y: number, text: string, style: any) {}
   setText(text: string) { return this; }
   setOrigin(x: number, y?: number) { return this; }
+  setFontSize(size: number) { return this; }
+  setColor(color: string) { return this; }
+  setStroke(color: string, thickness: number) { return this; }
+  setPosition(x: number, y: number) { return this; }
   destroy() {}
 };
 
@@ -190,6 +194,11 @@ const ScaleModesClass = {
   RESIZE: 3,
 };
 
+const ScaleClass = {
+  FIT: 3, // RESIZE is 3, which maps to FIT
+  CENTER_BOTH: 0,
+};
+
 const AUTO = 0;
 
 export {
@@ -205,6 +214,7 @@ export {
   TweensClass as Tweens,
   BlendModesClass as BlendModes,
   ScaleModesClass as ScaleModes,
+  ScaleClass as Scale,
   AUTO,
 };
 
@@ -221,5 +231,6 @@ export default {
   Tweens: TweensClass,
   BlendModes: BlendModesClass,
   ScaleModes: ScaleModesClass,
+  Scale: ScaleClass,
   AUTO: 0,
 };

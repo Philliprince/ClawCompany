@@ -6,6 +6,7 @@ jest.mock('phaser', () => {
     fillStyle: jest.fn(),
     fillRect: jest.fn(),
     fillRoundedRect: jest.fn(),
+    fillCircle: jest.fn(),
     lineStyle: jest.fn(),
     strokeRoundedRect: jest.fn(),
     setPosition: jest.fn(),
@@ -21,6 +22,9 @@ jest.mock('phaser', () => {
     width: 80,
     height: 16,
     setPosition: jest.fn(),
+    setFontSize: jest.fn(),
+    setColor: jest.fn(),
+    setStroke: jest.fn(),
     destroy: jest.fn(),
   });
 

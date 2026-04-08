@@ -30,6 +30,8 @@ import { SmartTaskVisualizer, DisplayMode } from '../ui/SmartTaskVisualizer';
 import { StatusAnimationSystem } from '../ui/StatusAnimationSystem';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
+import { InteractiveTutorial, InteractiveStepType } from '../ui/InteractiveTutorial';
+import { OnboardingManager, OnboardingPhase } from '../systems/OnboardingManager';
 import { EventBus } from '../systems/EventBus';
 import { ShadowRenderer } from '../sprites/ShadowRenderer';
 import { RoleVisuals } from '../sprites/RoleVisuals';
@@ -82,6 +84,8 @@ export class OfficeScene extends Phaser.Scene {
   private decorationGraphics: Phaser.GameObjects.Graphics[] = [];
   private virtualJoystick!: VirtualJoystick;
   private tutorialOverlay!: TutorialOverlay;
+  private interactiveTutorial!: InteractiveTutorial;
+  private onboardingManager!: OnboardingManager;
   private taskTimer: Phaser.Time.TimerEvent | null = null;
   private workstationTimer: Phaser.Time.TimerEvent | null = null;
   private eventBus!: EventBus;
@@ -906,56 +910,113 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setupTutorial(): void {
+    this.onboardingManager = new OnboardingManager();
+
+    this.onboardingManager.on('phase:complete', ({ phase }) => {
+      console.log(`[Onboarding] Phase completed: ${phase}`);
+    });
+    this.onboardingManager.on('onboarding:complete', () => {
+      console.log('[Onboarding] All phases completed!');
+    });
+    this.onboardingManager.on('achievement:unlock', (achievement) => {
+      console.log(`[Onboarding] Achievement unlocked: ${achievement.icon} ${achievement.title}`);
+    });
+
     const tutorialSteps = [
       {
+        id: 'welcome-1',
         title: '欢迎来到虚拟办公室！',
         description: '在这里，AI 团队将协作完成各种任务。让我们开始学习如何使用这个系统。',
+        phase: OnboardingPhase.WELCOME,
+        type: InteractiveStepType.INFO,
         position: { x: this.cameras.main.width / 2, y: 100 },
       },
       {
+        id: 'nav-move',
         title: '角色移动',
         description: '点击屏幕任意位置，角色会移动到该位置。你也可以使用 WASD 键控制。',
-        position: { x: 200, y: 400 },
-        width: 300,
-        height: 200,
-        highlight: true,
+        phase: OnboardingPhase.NAVIGATION,
+        type: InteractiveStepType.INTERACTION,
+        position: { x: 200, y: 300 },
+        interactionType: 'click',
+        targetArea: { x: 100, y: 200, width: 300, height: 200 },
       },
       {
+        id: 'task-view',
         title: '任务管理',
         description: '角色头上的气泡显示当前任务状态。点击角色可以查看任务详情。',
+        phase: OnboardingPhase.TASKS,
+        type: InteractiveStepType.INTERACTION,
         position: { x: 600, y: 300 },
-        width: 200,
-        height: 100,
-        highlight: true,
+        interactionType: 'click',
+        targetArea: { x: 500, y: 200, width: 200, height: 100 },
       },
       {
+        id: 'inter-joystick',
         title: '虚拟摇杆',
         description: '在移动设备上，可以使用右下角的虚拟摇杆控制角色移动。',
+        phase: OnboardingPhase.INTERACTION,
+        type: InteractiveStepType.HIGHLIGHT,
         position: { x: this.cameras.main.width - 150, y: this.cameras.main.height - 150 },
-        width: 200,
-        height: 200,
-        highlight: true,
+        targetArea: { x: this.cameras.main.width - 200, y: this.cameras.main.height - 200, width: 200, height: 200 },
       },
       {
+        id: 'complete-finish',
         title: '开始协作！',
         description: '现在你已经了解了基本操作。让 AI 团队开始工作吧！',
+        phase: OnboardingPhase.COMPLETE,
+        type: InteractiveStepType.INFO,
         position: { x: this.cameras.main.width / 2, y: 100 },
       },
     ];
 
-    this.tutorialOverlay = new TutorialOverlay(this, {
-      title: '虚拟办公室引导',
+    this.interactiveTutorial = new InteractiveTutorial(this, {
       steps: tutorialSteps,
-      skipButton: true,
       onComplete: () => {
+        this.onboardingManager.startPhase(OnboardingPhase.WELCOME);
+        const phases = Object.values(OnboardingPhase);
+        phases.forEach(phase => {
+          this.onboardingManager.startPhase(phase);
+          this.onboardingManager.completePhase(phase);
+        });
         console.log('新手引导完成');
+      },
+      onStepComplete: (step) => {
+        this.onboardingManager.recordStepResult({
+          stepId: step.id,
+          phase: step.phase,
+          completed: true,
+          timestamp: Date.now(),
+        });
       },
     });
 
-    // 延迟显示引导
-    this.time.delayedCall(2000, () => {
-      this.tutorialOverlay.show();
-    });
+    if (this.onboardingManager.isFirstTime()) {
+      this.time.delayedCall(2000, () => {
+        this.interactiveTutorial.show();
+      });
+    } else {
+      const oldTutorialSteps = [
+        {
+          title: '欢迎回来！',
+          description: '你已经完成了新手引导。点击任意位置开始工作。',
+          position: { x: this.cameras.main.width / 2, y: 100 },
+        },
+      ];
+
+      this.tutorialOverlay = new TutorialOverlay(this, {
+        title: '虚拟办公室',
+        steps: oldTutorialSteps,
+        skipButton: true,
+        onComplete: () => {
+          console.log('欢迎回来引导完成');
+        },
+      });
+
+      this.time.delayedCall(1000, () => {
+        this.tutorialOverlay.show();
+      });
+    }
   }
 
   getEventBridge(): SceneEventBridge | null {
