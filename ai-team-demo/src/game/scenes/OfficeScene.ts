@@ -1212,6 +1212,15 @@ export class OfficeScene extends Phaser.Scene {
       this.workstationTimer.remove(false);
       this.workstationTimer = null;
     }
+    
+    // 清理角色指示器（在清空数组之前）
+    this.agents.forEach(agent => {
+      const roleIndicator = (agent as any).roleIndicator;
+      if (roleIndicator) {
+        roleIndicator.destroy();
+      }
+    });
+    
     this.soundSystem.stopAll();
     this.soundSystem.destroy();
     this.officeDecorator.destroy();
@@ -1233,14 +1242,6 @@ export class OfficeScene extends Phaser.Scene {
     this.activeTasks.clear();
     this.agents = [];
     this.agentMap.clear();
-    
-    // 清理角色指示器
-    this.agents.forEach(agent => {
-      const roleIndicator = (agent as any).roleIndicator;
-      if (roleIndicator) {
-        roleIndicator.destroy();
-      }
-    });
   }
 
   getSoundSystem(): SoundSystem {
