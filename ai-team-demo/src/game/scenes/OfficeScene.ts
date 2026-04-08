@@ -26,6 +26,8 @@ import { TaskFlowSystem } from '../systems/TaskFlowSystem';
 import { TaskVisualizer } from '../ui/TaskVisualizer';
 import { TaskHistoryPanel } from '../ui/TaskHistoryPanel';
 import { TaskStatisticsPanel } from '../ui/TaskStatisticsPanel';
+import { SmartTaskVisualizer, DisplayMode } from '../ui/SmartTaskVisualizer';
+import { StatusAnimationSystem } from '../ui/StatusAnimationSystem';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { EventBus } from '../systems/EventBus';
@@ -89,6 +91,8 @@ export class OfficeScene extends Phaser.Scene {
   private taskVisualizer!: TaskVisualizer;
   private historyPanel!: TaskHistoryPanel;
   private statisticsPanel!: TaskStatisticsPanel;
+  private smartTaskVisualizer!: SmartTaskVisualizer;
+  private statusAnimationSystem!: StatusAnimationSystem;
   private characterSpriteSystem!: CharacterSpriteSystem;
   private officeMapGenerator!: OfficeMapGenerator;
 
@@ -208,6 +212,16 @@ export class OfficeScene extends Phaser.Scene {
       this.historyPanel.setPosition(10, 10);
       this.statisticsPanel = new TaskStatisticsPanel(this, this.taskManager.getStatisticsStore());
       this.statisticsPanel.setPosition(340, 10);
+      
+      // 初始化智能任务可视化系统
+      this.smartTaskVisualizer = new SmartTaskVisualizer(this, this.taskManager, {
+        maxDisplayDistance: 200,
+        autoHideDelay: 5000,
+        animationDuration: 300,
+      });
+      
+      // 初始化状态动画系统
+      this.statusAnimationSystem = new StatusAnimationSystem(this);
       this.particles = this.add.particles(0, 0, 'particle', {
         speed: { min: 20, max: 50 },
         scale: { start: 0.4, end: 0 },
@@ -500,6 +514,27 @@ export class OfficeScene extends Phaser.Scene {
 
     this.input.keyboard!.on('keydown-P', () => {
       this.performanceMonitor.printStats();
+    });
+
+    this.input.keyboard!.on('keydown-V', () => {
+      // 切换可视化模式
+      const currentMode = this.smartTaskVisualizer.getDisplayMode();
+      const modes = ['compact', 'detailed', 'overview', 'focus'];
+      const currentIndex = modes.indexOf(currentMode);
+      const nextMode = modes[(currentIndex + 1) % modes.length];
+      this.smartTaskVisualizer.setDisplayMode(nextMode as any);
+      this.soundSystem.play('click');
+    });
+
+    this.input.keyboard!.on('keydown-C', () => {
+      // 切换选中状态
+      if (this.selectedAgentIndex >= 0) {
+        const selectedAgent = this.agents[this.selectedAgentIndex];
+        this.smartTaskVisualizer.selectAgent(selectedAgent.agentId);
+      } else {
+        this.smartTaskVisualizer.deselectAgent();
+      }
+      this.soundSystem.play('click');
     });
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -998,6 +1033,9 @@ export class OfficeScene extends Phaser.Scene {
     this.syncShadows();
     this.syncTaskVisualizer();
     this.taskVisualizer.update();
+    
+    // 更新智能任务可视化系统
+    this.smartTaskVisualizer.update();
     this.historyPanel.update();
     this.statisticsPanel.update();
     this.taskFlowSystem.update();
@@ -1045,6 +1083,8 @@ export class OfficeScene extends Phaser.Scene {
   private syncTaskVisualizer(): void {
     this.agents.forEach((agent) => {
       this.taskVisualizer.updateAgentPosition(agent.agentId, agent.x, agent.y);
+      // 更新智能任务可视化系统
+      this.smartTaskVisualizer.updateAgentPosition(agent.agentId, agent.x, agent.y);
     });
   }
 
@@ -1066,6 +1106,14 @@ export class OfficeScene extends Phaser.Scene {
 
   getTaskHandoverSystem(): TaskHandoverSystem {
     return this.taskHandoverSystem;
+  }
+
+  getSmartTaskVisualizer(): SmartTaskVisualizer {
+    return this.smartTaskVisualizer;
+  }
+
+  getStatusAnimationSystem(): StatusAnimationSystem {
+    return this.statusAnimationSystem;
   }
 
   getTaskFlowSystem(): TaskFlowSystem {
@@ -1229,6 +1277,8 @@ export class OfficeScene extends Phaser.Scene {
     this.historyPanel.destroy();
     this.statisticsPanel.destroy();
     this.taskHandoverSystem.destroy();
+    this.smartTaskVisualizer.destroy();
+    this.statusAnimationSystem.clearAllAnimations();
     this.particleSystem.clearAllEffects();
     this.eventBridge?.disconnect();
     this.particleEmitters.forEach(e => e.destroy());
