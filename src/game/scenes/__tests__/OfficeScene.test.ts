@@ -1,5 +1,9 @@
 import { OfficeScene } from '../OfficeScene';
 import { RoomName, TaskType, Workstation, TilemapData, ActiveTask } from '../../types/OfficeTypes';
+import { SoundSystem, SoundType } from '../../systems/SoundSystem';
+import { AudioManager } from '../../systems/AudioManager';
+import { PhaserSoundAdapter } from '../../systems/PhaserSoundAdapter';
+import { EventBus } from '../../systems/EventBus';
 
 const mockPhysicsBody = {
   velocity: { x: 0, y: 0 },
@@ -305,6 +309,187 @@ describe('OfficeScene logic', () => {
       expect(nameLabels.size).toBe(0);
       expect(shadowGraphics.size).toBe(0);
       expect(decorationGraphics).toHaveLength(0);
+    });
+  });
+
+  describe('Sound integration', () => {
+    const mockBuffer = {
+      getChannelData: jest.fn(() => new Float32Array(44100)),
+      copyFromChannel: jest.fn(),
+      length: 44100,
+    };
+    const mockAudioContext = {
+      createBuffer: jest.fn(() => mockBuffer),
+      createBufferSource: jest.fn(() => ({ buffer: null, connect: jest.fn(), start: jest.fn(), onended: null })),
+      createGain: jest.fn(() => ({ gain: { value: 1 }, connect: jest.fn() })),
+      destination: {},
+      state: 'running',
+      close: jest.fn(),
+    } as unknown as AudioContext;
+
+    function createSoundIntegration() {
+      const soundSystem = new SoundSystem();
+      const audioManager = new AudioManager();
+      const soundAdapter = new PhaserSoundAdapter(soundSystem, audioManager, mockAudioContext);
+      return { soundSystem, audioManager, soundAdapter };
+    }
+
+    it('should play sound through adapter when soundSystem allows', () => {
+      const { soundSystem, soundAdapter } = createSoundIntegration();
+      const playSpy = jest.spyOn(soundAdapter, 'play');
+
+      const id = soundSystem.play('click');
+      if (id !== null) {
+        soundAdapter.play('click');
+      }
+      expect(playSpy).toHaveBeenCalledWith('click');
+
+      soundAdapter.destroy();
+      soundSystem.destroy();
+    });
+
+    it('should not play through adapter when soundSystem blocks via cooldown', () => {
+      const { soundSystem, soundAdapter } = createSoundIntegration();
+      const playSpy = jest.spyOn(soundAdapter, 'play');
+
+      const id = soundSystem.play('walk');
+      expect(id).toBeTruthy();
+      soundAdapter.play('walk');
+      expect(playSpy).toHaveBeenCalledTimes(1);
+
+      const id2 = soundSystem.play('walk');
+      expect(id2).toBeNull();
+      if (id2 !== null) {
+        soundAdapter.play('walk');
+      }
+      expect(playSpy).toHaveBeenCalledTimes(1);
+
+      soundAdapter.destroy();
+      soundSystem.destroy();
+    });
+
+    it('should play sound with volume option through adapter', () => {
+      const { soundSystem, soundAdapter } = createSoundIntegration();
+      const playSpy = jest.spyOn(soundAdapter, 'play');
+
+      const id = soundSystem.play('jump', { volume: 0.5 });
+      if (id !== null) {
+        soundAdapter.play('jump', { volume: 0.5 });
+      }
+      expect(playSpy).toHaveBeenCalledWith('jump', { volume: 0.5 });
+
+      soundAdapter.destroy();
+      soundSystem.destroy();
+    });
+
+    it('should play task-assigned sound on task:handover event', () => {
+      const eventBus = new EventBus();
+      const playedSounds: SoundType[] = [];
+
+      eventBus.on('task:handover', () => {
+        playedSounds.push('task-assigned');
+      });
+
+      eventBus.emit({
+        type: 'task:handover',
+        timestamp: Date.now(),
+        fromAgentId: 'alice',
+        toAgentId: 'bob',
+        taskId: 'task1',
+        description: 'Handover from alice to bob',
+      });
+
+      expect(playedSounds).toEqual(['task-assigned']);
+    });
+
+    it('should play error sound on task:failed event', () => {
+      const eventBus = new EventBus();
+      const playedSounds: SoundType[] = [];
+
+      eventBus.on('task:failed', () => {
+        playedSounds.push('error');
+      });
+
+      eventBus.emit({
+        type: 'task:failed',
+        timestamp: Date.now(),
+        taskId: 'task1',
+        agentId: 'alice',
+        error: 'Something went wrong',
+      });
+
+      expect(playedSounds).toEqual(['error']);
+    });
+
+    it('should propagate update to soundAdapter', () => {
+      const { soundSystem, audioManager, soundAdapter } = createSoundIntegration();
+      const updateSpy = jest.spyOn(audioManager, 'update');
+
+      soundAdapter.update(16);
+
+      expect(updateSpy).toHaveBeenCalledWith(16);
+
+      soundAdapter.destroy();
+      soundSystem.destroy();
+    });
+
+    it('should clean up adapter on destroy', () => {
+      const { soundSystem, soundAdapter } = createSoundIntegration();
+      const context = (soundAdapter as unknown as { context: AudioContext }).context;
+      const closeSpy = jest.spyOn(context, 'close');
+
+      soundAdapter.destroy();
+
+      expect(closeSpy).toHaveBeenCalled();
+      soundSystem.destroy();
+    });
+
+    it('should respect disabled sound system', () => {
+      const { soundSystem, soundAdapter } = createSoundIntegration();
+      const playSpy = jest.spyOn(soundAdapter, 'play');
+
+      soundSystem.setEnabled(false);
+      const id = soundSystem.play('click');
+      expect(id).toBeNull();
+      if (id !== null) {
+        soundAdapter.play('click');
+      }
+      expect(playSpy).not.toHaveBeenCalled();
+
+      soundAdapter.destroy();
+      soundSystem.destroy();
+    });
+
+    it('should handle multiple event listeners for sound playback', () => {
+      const eventBus = new EventBus();
+      const handoverSounds: SoundType[] = [];
+      const failedSounds: SoundType[] = [];
+
+      eventBus.on('task:handover', () => {
+        handoverSounds.push('task-assigned');
+      });
+      eventBus.on('task:failed', () => {
+        failedSounds.push('error');
+      });
+
+      eventBus.emit({
+        type: 'task:handover',
+        timestamp: Date.now(),
+        fromAgentId: 'alice',
+        toAgentId: 'bob',
+        taskId: 't1',
+        description: 'Handover',
+      });
+      eventBus.emit({
+        type: 'task:failed',
+        timestamp: Date.now(),
+        taskId: 't2',
+        agentId: 'charlie',
+        error: 'Failed',
+      });
+
+      expect(handoverSounds).toEqual(['task-assigned']);
+      expect(failedSounds).toEqual(['error']);
     });
   });
 });

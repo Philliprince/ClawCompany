@@ -17,7 +17,9 @@ import { PerformanceMonitor } from '../systems/PerformanceMonitor';
 import { MemoryManager } from '../systems/MemoryManager';
 import { RenderOptimizer } from '../systems/RenderOptimizer';
 import { ThrottleSystem } from '../systems/ThrottleSystem';
-import { SoundSystem } from '../systems/SoundSystem';
+import { SoundSystem, SoundType } from '../systems/SoundSystem';
+import { AudioManager } from '../systems/AudioManager';
+import { PhaserSoundAdapter } from '../systems/PhaserSoundAdapter';
 import { TargetMarker } from '../ui/TargetMarker';
 import { OfficeDecorator } from '../ui/OfficeDecorator';
 import { TaskManager } from '../systems/TaskManager';
@@ -77,6 +79,8 @@ export class OfficeScene extends Phaser.Scene {
   private static readonly MAX_PARTICLE_EMITTERS = 20;
   private static readonly STALE_EMITTER_AGE = 3000;
   private soundSystem!: SoundSystem;
+  private audioManager!: AudioManager;
+  private soundAdapter!: PhaserSoundAdapter;
   private targetMarker!: TargetMarker;
   private officeDecorator!: OfficeDecorator;
   private shadowRenderer!: ShadowRenderer;
@@ -207,6 +211,8 @@ export class OfficeScene extends Phaser.Scene {
       });
       this.throttleSystem = new ThrottleSystem();
       this.soundSystem = new SoundSystem();
+      this.audioManager = new AudioManager();
+      this.soundAdapter = new PhaserSoundAdapter(this.soundSystem, this.audioManager);
       this.shadowRenderer = new ShadowRenderer();
       this.cachedShadowOffsetY = this.shadowRenderer.getShadowDimensions(32, 32).offsetY;
       this.roleVisuals = new RoleVisuals();
@@ -256,6 +262,7 @@ export class OfficeScene extends Phaser.Scene {
       this.setupKeyboard();
       this.setupTaskSystem();
       this.setupEventBridge();
+      this.setupSoundEventListeners();
       this.setupVirtualJoystick();
       
       console.log('✅ 虚拟办公室场景创建成功');
@@ -384,7 +391,7 @@ export class OfficeScene extends Phaser.Scene {
     agent.moveTo(target.x, target.y);
     agent.setWorking(true);
 
-    this.soundSystem.play('task-assigned');
+    this.playSound('task-assigned');
 
     this.activeTasks.set(agent.agentId, {
       agentId: agent.agentId,
@@ -474,7 +481,7 @@ export class OfficeScene extends Phaser.Scene {
           const dy = Math.abs(agent.y - original.y);
 
           if (dx < 20 && dy < 20) {
-            this.soundSystem.play('task-complete');
+            this.playSound('task-complete');
             completed.push(agentId);
           }
         }
@@ -493,7 +500,7 @@ export class OfficeScene extends Phaser.Scene {
       this.selectedAgentIndex = (this.selectedAgentIndex + 1) % this.agents.length;
       if (this.agents[this.selectedAgentIndex]) {
         this.movementSystem.setActiveAgent(this.agents[this.selectedAgentIndex]);
-        this.soundSystem.play('tab-switch');
+        this.playSound('tab-switch');
       }
     });
 
@@ -532,7 +539,7 @@ export class OfficeScene extends Phaser.Scene {
       const currentIndex = modes.indexOf(currentMode);
       const nextMode = modes[(currentIndex + 1) % modes.length];
       this.smartTaskVisualizer.setDisplayMode(nextMode as DisplayMode);
-      this.soundSystem.play('click');
+      this.playSound('click');
     });
 
     this.input.keyboard!.on('keydown-C', () => {
@@ -543,7 +550,7 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         this.smartTaskVisualizer.deselectAgent();
       }
-      this.soundSystem.play('click');
+      this.playSound('click');
     });
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -553,7 +560,7 @@ export class OfficeScene extends Phaser.Scene {
         if (idx >= 0) {
           this.selectedAgentIndex = idx;
           this.movementSystem.setActiveAgent(clickedAgent);
-          this.soundSystem.play('click');
+          this.playSound('click');
 
           this.agentHistoryPanel.showForAgent(clickedAgent.agentId, clickedAgent.agentName);
 
@@ -569,7 +576,7 @@ export class OfficeScene extends Phaser.Scene {
         if (agent) {
           agent.moveTo(pointer.worldX, pointer.worldY);
           this.targetMarker.setTarget(pointer.worldX, pointer.worldY);
-          this.soundSystem.play('click');
+          this.playSound('click');
         }
         this.taskVisualizer.hideTaskDetailPanel();
       }
@@ -597,9 +604,9 @@ export class OfficeScene extends Phaser.Scene {
 
     if (isWorking) {
       this.playParticleEffect(agent.agentId, 'work-start');
-      this.soundSystem.play('work-start');
+      this.playSound('work-start');
     } else {
-      this.soundSystem.play('work-end');
+      this.playSound('work-end');
     }
   }
 
@@ -829,8 +836,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
     
-    // 播放互动音效
-    this.soundSystem.play('click');
+    this.playSound('click');
   }
 
   private setupInterAgentCollisions(): void {
@@ -899,6 +905,16 @@ export class OfficeScene extends Phaser.Scene {
 
     this.eventBridge = new SceneEventBridge(actions);
     this.eventBridge.connect();
+  }
+
+  private setupSoundEventListeners(): void {
+    this.eventBus.on('task:handover', () => {
+      this.playSound('task-assigned');
+    });
+
+    this.eventBus.on('task:failed', () => {
+      this.playSound('error');
+    });
   }
 
   private setupVirtualJoystick(): void {
@@ -1108,6 +1124,7 @@ export class OfficeScene extends Phaser.Scene {
     this.checkTaskCompletion();
     this.particleSystem.update(delta);
     this.soundSystem.update(delta);
+    this.soundAdapter.update(delta);
 
     const selectedAgent = this.agents[this.selectedAgentIndex];
     if (selectedAgent && this.targetMarker.isActive()) {
@@ -1338,6 +1355,8 @@ export class OfficeScene extends Phaser.Scene {
     });
     
     this.soundSystem.stopAll();
+    this.soundAdapter.stopAll();
+    this.soundAdapter.destroy();
     this.soundSystem.destroy();
     this.officeDecorator.destroy();
     this.taskFlowSystem.destroy();
@@ -1365,6 +1384,21 @@ export class OfficeScene extends Phaser.Scene {
 
   getSoundSystem(): SoundSystem {
     return this.soundSystem;
+  }
+
+  getAudioManager(): AudioManager {
+    return this.audioManager;
+  }
+
+  getSoundAdapter(): PhaserSoundAdapter {
+    return this.soundAdapter;
+  }
+
+  private playSound(type: SoundType, options?: { volume?: number }): void {
+    const id = this.soundSystem.play(type, options);
+    if (id !== null) {
+      this.soundAdapter.play(type, options);
+    }
   }
 
   getOfficeDecorator(): OfficeDecorator {
