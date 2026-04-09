@@ -179,3 +179,220 @@ describe('Multi-Agent State Management', () => {
     });
   });
 });
+
+type MockTween = {
+  targets: unknown;
+  isActive: () => boolean;
+  stop: () => void;
+  destroy: () => void;
+};
+
+function createMockScene() {
+  const tweens: MockTween[] = [];
+
+  const mockTweenManager = {
+    add: jest.fn((config: Record<string, unknown>) => {
+      let active = true;
+      const tween: MockTween = {
+        targets: config.targets,
+        isActive: () => active,
+        stop: () => { active = false; },
+        destroy: () => { active = false; },
+      };
+      tweens.push(tween);
+
+      if (config.onComplete && typeof config.onComplete === 'function') {
+        (config as Record<string, unknown>)._onComplete = config.onComplete;
+      }
+
+      return tween;
+    }),
+    killTweensOf: jest.fn(),
+    _tweens: tweens,
+  };
+
+  return {
+    tweens: mockTweenManager,
+    add: {
+      existing: jest.fn(),
+      graphics: jest.fn(() => ({
+        fillStyle: jest.fn(),
+        fillRoundedRect: jest.fn(),
+        lineStyle: jest.fn(),
+        strokeRoundedRect: jest.fn(),
+        destroy: jest.fn(),
+      })),
+      text: jest.fn(() => ({
+        setOrigin: jest.fn(),
+        setDepth: jest.fn(),
+      })),
+      container: jest.fn(() => ({
+        add: jest.fn(),
+        destroy: jest.fn(),
+      })),
+    },
+    physics: {
+      add: {
+        existing: jest.fn(),
+      },
+    },
+    game: {
+      loop: { delta: 16 },
+    },
+  };
+}
+
+function createMockAgent(scene: ReturnType<typeof createMockScene>, x = 0, y = 0) {
+  const pathPoints: PathPoint[] = [
+    { x: 100, y: 100, action: 'move' },
+    { x: 200, y: 200, action: 'move' },
+  ];
+
+  let onArrivalCallback: (() => void) | null = null;
+  let isNavigating = false;
+  let activeTween: MockTween | null = null;
+
+  const mockPathfinding = {
+    findPath: jest.fn((_sx: number, _sy: number, _tx: number, _ty: number) => pathPoints),
+  };
+
+  function moveTo(targetX: number, targetY: number, onArrival?: () => void): void {
+    if (activeTween) {
+      activeTween.stop();
+      activeTween = null;
+    }
+
+    isNavigating = true;
+    if (onArrival) onArrivalCallback = onArrival;
+
+    const path = mockPathfinding.findPath(x, y, targetX, targetY);
+    for (let i = 0; i < path.length; i++) {
+      const point = path[i];
+      const prevX = i === 0 ? x : path[i - 1].x;
+      const prevY = i === 0 ? y : path[i - 1].y;
+      const dx = point.x - prevX;
+      const dy = point.y - prevY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const duration = (distance / 200) * 1000;
+
+      activeTween = scene.tweens.add({
+        targets: { x: prevX, y: prevY },
+        x: point.x,
+        y: point.y,
+        duration,
+        ease: 'Power2',
+        onComplete: () => {
+          x = point.x;
+          y = point.y;
+          if (i === path.length - 1) {
+            isNavigating = false;
+            onArrivalCallback?.();
+            onArrivalCallback = null;
+          }
+        },
+      });
+    }
+  }
+
+  function stopMovement(): void {
+    if (activeTween) {
+      activeTween.stop();
+      activeTween = null;
+    }
+    isNavigating = false;
+    onArrivalCallback = null;
+  }
+
+  return {
+    x, y,
+    scene,
+    moveTo,
+    stopMovement,
+    mockPathfinding,
+    isNavigatingToTarget: () => isNavigating,
+    getOnArrivalCallback: () => onArrivalCallback,
+  };
+}
+
+describe('Tween-based Movement', () => {
+  it('should create a tween when moveTo is called', () => {
+    const scene = createMockScene();
+    const agent = createMockAgent(scene, 0, 0);
+
+    agent.moveTo(200, 200);
+
+    expect(scene.tweens.add).toHaveBeenCalled();
+    expect(agent.isNavigatingToTarget()).toBe(true);
+  });
+
+  it('should trigger arrival callback when tween completes', () => {
+    const scene = createMockScene();
+    const agent = createMockAgent(scene, 0, 0);
+    const arrivalCallback = jest.fn();
+
+    agent.moveTo(200, 200, arrivalCallback);
+
+    const tweens = scene.tweens._tweens;
+    const lastTween = tweens[tweens.length - 1];
+    const config = scene.tweens.add.mock.calls[scene.tweens.add.mock.calls.length - 1][0] as Record<string, unknown>;
+
+    expect(config.onComplete).toBeDefined();
+
+    (config.onComplete as () => void)();
+
+    expect(arrivalCallback).toHaveBeenCalled();
+  });
+
+  it('should stop previous tween when moveTo is called again', () => {
+    const scene = createMockScene();
+    const agent = createMockAgent(scene, 0, 0);
+
+    agent.moveTo(200, 200);
+
+    expect(scene.tweens.add).toHaveBeenCalledTimes(2);
+
+    const firstTweenCount = scene.tweens.add.mock.calls.length;
+
+    agent.moveTo(300, 300);
+
+    expect(scene.tweens.add.mock.calls.length).toBeGreaterThan(firstTweenCount);
+  });
+
+  it('should stop navigation and clean up state when stopMovement is called', () => {
+    const scene = createMockScene();
+    const agent = createMockAgent(scene, 0, 0);
+
+    agent.moveTo(200, 200);
+
+    expect(agent.isNavigatingToTarget()).toBe(true);
+
+    agent.stopMovement();
+
+    expect(agent.isNavigatingToTarget()).toBe(false);
+  });
+
+  it('should calculate tween duration based on segment distance', () => {
+    const scene = createMockScene();
+    const agent = createMockAgent(scene, 0, 0);
+
+    agent.moveTo(200, 200);
+
+    const firstCall = scene.tweens.add.mock.calls[0][0] as Record<string, unknown>;
+    const dx = 100 - 0;
+    const dy = 100 - 0;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const expectedDuration = (distance / 200) * 1000;
+
+    expect(firstCall.duration).toBeCloseTo(expectedDuration, 1);
+  });
+
+  it('should use Power2 easing for smooth movement', () => {
+    const scene = createMockScene();
+    const agent = createMockAgent(scene, 0, 0);
+
+    agent.moveTo(200, 200);
+
+    const firstCall = scene.tweens.add.mock.calls[0][0] as Record<string, unknown>;
+    expect(firstCall.ease).toBe('Power2');
+  });
+});

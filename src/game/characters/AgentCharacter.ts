@@ -40,6 +40,7 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   private squashTween: Phaser.Tweens.Tween | null = null;
   private wobbleTween: Phaser.Tweens.Tween | null = null;
   private bounceTween: Phaser.Tweens.Tween | null = null;
+  private movementTweens: Phaser.Tweens.Tween[] = [];
   private isMoving: boolean = false;
   private moveSpeed: number = 200;
 
@@ -83,26 +84,19 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   }
 
   update(): void {
-    const velocityX = this.body?.velocity.x || 0;
-    const velocityY = this.body?.velocity.y || 0;
-    
-    const isMovingNow = Math.abs(velocityX) > 10 || Math.abs(velocityY) > 10;
-    
+    const isMovingNow = this.isNavigating;
+
     if (isMovingNow && !this.isMoving) {
       this.playMoveStartAnimation();
     } else if (!isMovingNow && this.isMoving) {
       this.playMoveEndAnimation();
     }
     this.isMoving = isMovingNow;
-    
-    if (isMovingNow) {
-      this.updateMovementAnimation(velocityX, velocityY);
-    }
 
-    if (this.animationController) {
+    if (isMovingNow && this.animationController) {
       this.animationController.update(
-        velocityX,
-        velocityY,
+        this.lastVelocityX,
+        this.lastVelocityY,
         true,
         this.isWorking
       );
@@ -110,32 +104,6 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
 
     this.updateEmotionBubble();
     this.updateEmojiPosition();
-
-    if (this.isNavigating) {
-      this.updateNavigation();
-    }
-  }
-  
-  private updateMovementAnimation(velocityX: number, velocityY: number): void {
-    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-    const stretchAmount = Math.min(speed / this.moveSpeed * 0.15, 0.15);
-    
-    if (Math.abs(velocityX) > Math.abs(velocityY)) {
-      this.setScale(1 + stretchAmount, 1 - stretchAmount * 0.5);
-    } else {
-      this.setScale(1 - stretchAmount * 0.5, 1 + stretchAmount);
-    }
-    
-    if (!this.bounceTween) {
-      this.bounceTween = this.scene.tweens.add({
-        targets: this,
-        scaleY: '+=0.02',
-        duration: 150,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    }
   }
   
   private playMoveStartAnimation(): void {
@@ -208,13 +176,16 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
   moveTo(targetX: number, targetY: number, onArrival?: () => void): void {
     if (!this.pathfindingSystem) return;
 
+    this.stopMovement();
+
     if (!this.originalPosition) {
       this.originalPosition = { x: this.x, y: this.y };
     }
 
     const path = this.pathfindingSystem.findPath(this.x, this.y, targetX, targetY);
+    if (path.length === 0) return;
+
     this.currentPath = path;
-    this.currentPathIndex = 0;
     this.targetPosition = { x: targetX, y: targetY };
     this.isNavigating = true;
     this.navigationState = 'moving';
@@ -222,49 +193,63 @@ export class AgentCharacter extends Phaser.Physics.Arcade.Sprite {
     if (onArrival) {
       this.arrivalCallback = onArrival;
     }
+
+    this.tweenAlongPath(path, 0);
   }
 
-  private updateNavigation(): void {
-    if (!this.isNavigating || this.currentPath.length === 0) return;
-
-    const nextPoint = this.currentPath[this.currentPathIndex];
-
-    if (!nextPoint) {
+  private tweenAlongPath(path: PathPoint[], startIndex: number): void {
+    if (startIndex >= path.length) {
       this.completeNavigation();
       return;
     }
 
-    const dx = nextPoint.x - this.x;
-    const dy = nextPoint.y - this.y;
+    const point = path[startIndex];
+    const dx = point.x - this.x;
+    const dy = point.y - this.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance < this.arrivalThreshold) {
-      this.currentPathIndex++;
-      if (this.currentPathIndex >= this.currentPath.length) {
-        this.completeNavigation();
-        return;
-      }
+      this.tweenAlongPath(path, startIndex + 1);
+      return;
     }
 
-    const minDistance = 0.001;
-    const safeDistance = Math.max(distance, minDistance);
-    const directionX = dx / safeDistance;
-    const directionY = dy / safeDistance;
-    
-    const targetVelX = directionX * PHYSICS_CONFIG.moveSpeed;
-    const targetVelY = directionY * PHYSICS_CONFIG.moveSpeed;
-    
-    const smoothing = 0.15;
-    const currentVelX = this.body?.velocity.x || 0;
-    const currentVelY = this.body?.velocity.y || 0;
-    this.setVelocityX(currentVelX + (targetVelX - currentVelX) * smoothing);
-    this.setVelocityY(currentVelY + (targetVelY - currentVelY) * smoothing);
+    const duration = (distance / this.moveSpeed) * 1000;
+
+    const tween = this.scene.tweens.add({
+      targets: this,
+      x: point.x,
+      y: point.y,
+      duration,
+      ease: 'Power2',
+      onComplete: () => {
+        this.lastVelocityX = dx / (duration / 1000);
+        this.lastVelocityY = dy / (duration / 1000);
+        this.tweenAlongPath(path, startIndex + 1);
+      },
+    });
+
+    this.movementTweens.push(tween);
+  }
+
+  stopMovement(): void {
+    for (const tween of this.movementTweens) {
+      if (tween.isActive()) {
+        tween.stop();
+      }
+    }
+    this.movementTweens = [];
+    this.isNavigating = false;
+    this.navigationState = 'idle';
+    this.setVelocityX(0);
+    this.setVelocityY(0);
   }
 
   private completeNavigation(): void {
+    this.movementTweens = [];
     this.isNavigating = false;
     this.navigationState = 'arrived';
     this.setVelocityX(0);
+    this.setVelocityY(0);
     this.arrivalCallback?.();
     this.onArrivalCallbacks.forEach(cb => cb());
     this.arrivalCallback = null;
