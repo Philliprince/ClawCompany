@@ -9,6 +9,7 @@ import { ControlPanel } from "@/components/dashboard/ControlPanel";
 import { PerformanceMetricsPanel } from "@/components/dashboard/PerformanceMetricsPanel";
 import { useEventStream } from "@/hooks/useEventStream";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useOpenClawSessions } from "@/hooks/useOpenClawSessions";
 import { Game } from "@/game";
 import { DashboardStore } from "@/game/data/DashboardStore";
 import { GameEvent } from "@/game/types/GameEvents";
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const store = useMemo(() => new DashboardStore(), []);
   const { isConnected, isReconnecting } = useEventStream(store);
   const { agents, events, stats } = useDashboardStore(store);
+  useOpenClawSessions(store);
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Game | null>(null);
   

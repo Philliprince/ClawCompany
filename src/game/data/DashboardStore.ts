@@ -166,6 +166,24 @@ export class DashboardStore {
     };
   }
 
+  loadAgents(agents: AgentInfo[]): void {
+    const newMap = new Map<string, AgentInfo>()
+    for (const agent of agents) {
+      const existing = this.agents.get(agent.id)
+      if (existing) {
+        existing.name = agent.name
+        existing.role = agent.role
+        existing.status = agent.status
+      } else {
+        newMap.set(agent.id, { ...agent })
+      }
+    }
+    for (const [id, agent] of newMap) {
+      this.agents.set(id, agent)
+    }
+    this.notify()
+  }
+
   reset(): void {
     for (const agent of DEFAULT_AGENTS) {
       this.agents.set(agent.id, { ...agent });
