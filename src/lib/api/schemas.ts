@@ -35,6 +35,14 @@ export const AgentPutRequestSchema = z.object({
 
 export type AgentPutRequest = z.infer<typeof AgentPutRequestSchema>
 
+export const GameEventPostSchema = z.object({
+  type: z.string().min(1, 'Event type is required'),
+  timestamp: z.number().optional(),
+  agentId: z.string().optional(),
+}).passthrough()
+
+export type GameEventPostRequest = z.infer<typeof GameEventPostSchema>
+
 export function parseRequestBody<T>(
   schema: z.ZodType<T>,
   body: unknown,

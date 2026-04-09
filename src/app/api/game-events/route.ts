@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
-import { withAuth } from '@/lib/api/route-utils';
+import { withAuth, withRateLimit, successResponse } from '@/lib/api/route-utils';
+import { GameEventPostSchema, parseRequestBody } from '@/lib/api/schemas';
 import { getGameEventStore } from '@/game/data/GameEventStore';
+import type { GameEvent } from '@/game/types/GameEvents';
 
 export async function GET(request: NextRequest) {
   const store = getGameEventStore();
@@ -75,35 +77,19 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export const POST = withAuth(async (request: NextRequest) => {
-  try {
-    const body = await request.json();
+export const POST = withAuth(withRateLimit(async (request: NextRequest) => {
+  const body = await request.json();
+  const parsed = parseRequestBody(GameEventPostSchema, body);
+  if ('error' in parsed) return parsed.error;
 
-    if (!body || !body.type) {
-      return NextResponse.json(
-        { success: false, error: 'Event type is required' },
-        { status: 400 }
-      );
-    }
+  const store = getGameEventStore();
 
-    const store = getGameEventStore();
+  const event = {
+    ...parsed.data,
+    timestamp: parsed.data.timestamp ?? Date.now(),
+  } as GameEvent;
 
-    const event = {
-      ...body,
-      timestamp: body.timestamp ?? Date.now(),
-    };
+  store.push(event);
 
-    store.push(event);
-
-    return NextResponse.json({ success: true, event }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Invalid request body',
-      },
-      { status: 400 }
-    );
-  }
-});
-
+  return successResponse({ event }, request);
+}, 'Game Events API'));
