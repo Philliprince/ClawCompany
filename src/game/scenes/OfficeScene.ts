@@ -25,6 +25,7 @@ import { TaskHandoverSystem } from '../systems/TaskHandoverSystem';
 import { TaskFlowSystem } from '../systems/TaskFlowSystem';
 import { TaskVisualizer } from '../ui/TaskVisualizer';
 import { TaskHistoryPanel } from '../ui/TaskHistoryPanel';
+import { AgentHistoryPanel } from '../ui/AgentHistoryPanel';
 import { TaskStatisticsPanel } from '../ui/TaskStatisticsPanel';
 import { SmartTaskVisualizer, DisplayMode } from '../ui/SmartTaskVisualizer';
 import { StatusAnimationSystem } from '../ui/StatusAnimationSystem';
@@ -94,6 +95,7 @@ export class OfficeScene extends Phaser.Scene {
   private taskFlowSystem!: TaskFlowSystem;
   private taskVisualizer!: TaskVisualizer;
   private historyPanel!: TaskHistoryPanel;
+  private agentHistoryPanel!: AgentHistoryPanel;
   private statisticsPanel!: TaskStatisticsPanel;
   private smartTaskVisualizer!: SmartTaskVisualizer;
   private statusAnimationSystem!: StatusAnimationSystem;
@@ -214,6 +216,8 @@ export class OfficeScene extends Phaser.Scene {
       this.taskVisualizer = new TaskVisualizer(this, this.taskManager);
       this.historyPanel = new TaskHistoryPanel(this, this.taskManager.getHistoryStore());
       this.historyPanel.setPosition(10, 10);
+      this.agentHistoryPanel = new AgentHistoryPanel(this, this.taskManager.getHistoryStore());
+      this.agentHistoryPanel.setPosition(this.cameras.main.width - 310, 10);
       this.statisticsPanel = new TaskStatisticsPanel(this, this.taskManager.getStatisticsStore());
       this.statisticsPanel.setPosition(340, 10);
       
@@ -549,6 +553,8 @@ export class OfficeScene extends Phaser.Scene {
           this.selectedAgentIndex = idx;
           this.movementSystem.setActiveAgent(clickedAgent);
           this.soundSystem.play('click');
+
+          this.agentHistoryPanel.showForAgent(clickedAgent.agentId, clickedAgent.agentName);
 
           const task = this.taskManager.getTaskByAgent(clickedAgent.agentId);
           if (task) {
@@ -1093,6 +1099,7 @@ export class OfficeScene extends Phaser.Scene {
     // 更新智能任务可视化系统
     this.smartTaskVisualizer.update();
     this.historyPanel.update();
+    this.agentHistoryPanel.update();
     this.statisticsPanel.update();
     this.taskFlowSystem.update();
     this.movementSystem.update();
@@ -1154,6 +1161,10 @@ export class OfficeScene extends Phaser.Scene {
 
   getHistoryPanel(): TaskHistoryPanel {
     return this.historyPanel;
+  }
+
+  getAgentHistoryPanel(): AgentHistoryPanel {
+    return this.agentHistoryPanel;
   }
 
   getStatisticsPanel(): TaskStatisticsPanel {
@@ -1331,6 +1342,7 @@ export class OfficeScene extends Phaser.Scene {
     this.taskFlowSystem.destroy();
     this.taskVisualizer.destroy();
     this.historyPanel.destroy();
+    this.agentHistoryPanel.destroy();
     this.statisticsPanel.destroy();
     this.taskHandoverSystem.destroy();
     this.smartTaskVisualizer.destroy();
