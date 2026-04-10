@@ -368,6 +368,7 @@ export abstract class BaseOrchestrator {
       }
 
       await this.saveResponseFiles(task, cb, devResponse.files, allFiles)
+      task.files = allFiles.map(f => f.path)
 
       cb.updateTaskStatus(task.id, 'review')
 
