@@ -119,6 +119,7 @@ describe('E2E Smoke: Iteration Coverage (PR#4/5/7)', () => {
               title: '实现数据获取函数',
               description: '需要包含错误处理',
               assignedTo: 'dev',
+              status: 'pending',
               dependencies: [],
               files: [],
             }],
@@ -222,7 +223,7 @@ describe('E2E Smoke: Iteration Coverage (PR#4/5/7)', () => {
           return {
             agent: 'pm',
             message: 'PM done',
-            tasks: [{ title: '创建组件', description: '带样式', assignedTo: 'dev', dependencies: [], files: [] }],
+            tasks: [{ title: '创建组件', description: '带样式', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] }],
             status: 'success',
           }
         }
@@ -276,6 +277,7 @@ describe('E2E Smoke: Iteration Coverage (PR#4/5/7)', () => {
               title: '创建登录组件',
               description: '带表单验证',
               assignedTo: 'dev',
+              status: 'pending',
               dependencies: [],
               files: [],
             }],
