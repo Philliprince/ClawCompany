@@ -20,6 +20,11 @@ export class Game extends Phaser.Game {
     return (scene as { getAgents?: () => AgentCharacter[] })?.getAgents?.() || [];
   }
 
+  triggerTestTask(description?: string): { agentId: string; description: string } | null {
+    const scene = this.scene.getScene('OfficeScene');
+    return (scene as { triggerTestTask?: (description?: string) => { agentId: string; description: string } | null })?.triggerTestTask?.(description) ?? null;
+  }
+
   destroy(destroyChildren?: boolean): void {
     super.destroy(destroyChildren || false);
     const scene = this.scene.getScene('OfficeScene');

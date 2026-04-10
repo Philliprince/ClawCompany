@@ -1286,6 +1286,58 @@ export class OfficeScene extends Phaser.Scene {
     return this.renderOptimizer;
   }
 
+  private static readonly PM_AGENT_ID = 'charlie';
+
+  private static readonly TEST_TASKS: { description: string }[] = [
+    { description: '写一个个人博客网站，包含首页、关于我、文章列表三个页面，使用 Next.js 和 Tailwind CSS' },
+    { description: '为用户登录模块编写单元测试，覆盖正常登录、密码错误、账户锁定三种场景' },
+    { description: '审查 src/lib/gateway/client.ts 的代码质量，关注错误处理和资源释放' },
+    { description: '组织迭代规划会议，讨论下一版本的功能优先级和排期' },
+    { description: '实现一个 REST API 端点 /api/health，返回服务状态和当前时间' },
+  ];
+
+  triggerTestTask(description?: string): { agentId: string; description: string } | null {
+    const pmAgent = this.agentMap.get(OfficeScene.PM_AGENT_ID);
+    if (!pmAgent) return null;
+
+    if (this.activeTasks.has(pmAgent.agentId) || pmAgent.isNavigatingToTarget()) return null;
+
+    const taskDescription = description ?? OfficeScene.TEST_TASKS[Math.floor(Math.random() * OfficeScene.TEST_TASKS.length)].description;
+
+    this.moveAgentToRoom(pmAgent.agentId, 'pm-office');
+    pmAgent.setWorking(true);
+
+    this.activeTasks.set(pmAgent.agentId, {
+      agentId: pmAgent.agentId,
+      targetX: this.roomPositions['pm-office'].x,
+      targetY: this.roomPositions['pm-office'].y,
+      returning: false,
+    });
+
+    this.eventBus.emit('task:assigned', {
+      type: 'task:assigned',
+      agentId: pmAgent.agentId,
+      task: {
+        id: `test-${pmAgent.agentId}-${Date.now()}`,
+        description: taskDescription,
+        taskType: 'meeting',
+      },
+      timestamp: Date.now(),
+    });
+
+    this.eventBus.emit({
+      type: 'openclaw:send',
+      timestamp: Date.now(),
+      sessionKey: pmAgent.agentId,
+      message: taskDescription,
+      agentRole: 'pm',
+    } as import('../types/GameEvents').OpenClawSendEvent);
+
+    this.playSound('task-assigned');
+
+    return { agentId: pmAgent.agentId, description: taskDescription };
+  }
+
   private runOptimizationCheck(): void {
     const now = Date.now();
     if (now - this.lastOptimizationCheck < OfficeScene.OPTIMIZATION_CHECK_INTERVAL) return;

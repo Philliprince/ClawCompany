@@ -171,4 +171,27 @@ describe('Game module', () => {
       expect(game).toBeInstanceOf(Game);
     });
   });
+
+  describe('triggerTestTask', () => {
+    it('should delegate to OfficeScene.triggerTestTask', () => {
+      const game = startGame('container');
+      const mockResult = { agentId: 'charlie', description: 'test' };
+      (game as any).scene = {
+        getScene: jest.fn().mockReturnValue({
+          triggerTestTask: jest.fn().mockReturnValue(mockResult),
+        }),
+      };
+      const result = game.triggerTestTask('test');
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should return null when scene has no triggerTestTask', () => {
+      const game = startGame('container');
+      (game as any).scene = {
+        getScene: jest.fn().mockReturnValue({}),
+      };
+      const result = game.triggerTestTask('test');
+      expect(result).toBeNull();
+    });
+  });
 });

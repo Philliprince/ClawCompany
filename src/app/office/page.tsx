@@ -19,6 +19,8 @@ export default function OfficePage() {
   } | null>(null);
   const [showPerformanceDetail, setShowPerformanceDetail] = useState(false);
   const [showEnhancedPanel, setShowEnhancedPanel] = useState(false);
+  const [showTaskPanel, setShowTaskPanel] = useState(false);
+  const [lastTaskResult, setLastTaskResult] = useState<{ agentId: string; description: string } | null>(null);
 
   const updatePerformanceStats = useCallback(() => {
     if (gameRef.current && gameRef.current.getPerformanceMonitor) {
@@ -64,6 +66,9 @@ export default function OfficePage() {
       if (event.shiftKey && event.key === 'P') {
         event.preventDefault();
         setShowEnhancedPanel(prev => !prev);
+      }
+      if (event.key === 'T' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        setShowTaskPanel(prev => !prev);
       }
     };
 
@@ -238,7 +243,35 @@ export default function OfficePage() {
             </p>
           </div>
         </div>
-      </main>
+       </main>
+       <div className="fixed bottom-6 right-6 z-50">
+         {showTaskPanel && (
+           <div className="mb-3 bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-xl p-4 w-80 shadow-2xl">
+             <div className="flex items-center justify-between mb-3">
+               <span className="text-sm font-medium text-gray-200">触发测试任务</span>
+               <button onClick={() => setShowTaskPanel(false)} className="text-gray-400 hover:text-gray-200 text-lg leading-none">&times;</button>
+             </div>
+              <div className="space-y-2">
+                <button onClick={() => { const r = gameRef.current?.triggerTestTask('写一个个人博客网站，包含首页、关于我、文章列表三个页面，使用 Next.js 和 Tailwind CSS'); if (r) setLastTaskResult(r); setShowTaskPanel(false); }} className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"><span className="text-blue-400 font-medium">PM</span> 写一个个人博客网站</button>
+                <button onClick={() => { const r = gameRef.current?.triggerTestTask('为用户登录模块编写单元测试，覆盖正常登录、密码错误、账户锁定三种场景'); if (r) setLastTaskResult(r); setShowTaskPanel(false); }} className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"><span className="text-green-400 font-medium">PM</span> 为登录模块编写单元测试</button>
+                <button onClick={() => { const r = gameRef.current?.triggerTestTask('审查 src/lib/gateway/client.ts 的代码质量，关注错误处理和资源释放'); if (r) setLastTaskResult(r); setShowTaskPanel(false); }} className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"><span className="text-purple-400 font-medium">PM</span> 审查 client.ts 代码质量</button>
+                <button onClick={() => { const r = gameRef.current?.triggerTestTask('实现一个 REST API 端点 /api/health，返回服务状态和当前时间'); if (r) setLastTaskResult(r); setShowTaskPanel(false); }} className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"><span className="text-cyan-400 font-medium">PM</span> 实现 /api/health 端点</button>
+                <button onClick={() => { const r = gameRef.current?.triggerTestTask(); if (r) setLastTaskResult(r); setShowTaskPanel(false); }} className="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"><span className="text-orange-400 font-medium">PM</span> 随机发送一个预设任务</button>
+              </div>
+              {lastTaskResult && (
+                <div className="mt-3 pt-2 border-t border-gray-700 text-xs text-gray-400">
+                  上次发给: <span className="text-gray-300">{lastTaskResult.agentId}</span> — <span className="text-gray-400 truncate inline-block max-w-[200px] align-bottom">{lastTaskResult.description}</span>
+                </div>
+              )}
+           </div>
+         )}
+         <button onClick={() => setShowTaskPanel(!showTaskPanel)} className="w-12 h-12 bg-primary-600 hover:bg-primary-700 rounded-full shadow-lg flex items-center justify-center text-white text-lg transition-colors" title="触发测试任务 (T)">
+           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+         </button>
+       </div>
+       {showTaskPanel && (
+         <div className="fixed inset-0 z-40" onClick={() => setShowTaskPanel(false)} />
+       )}
     </div>
   );
 }

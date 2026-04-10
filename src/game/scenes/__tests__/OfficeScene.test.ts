@@ -553,4 +553,82 @@ describe('OfficeScene logic', () => {
       expect(guardResult).toBe(true);
     });
   });
+
+  describe('triggerTestTask', () => {
+    it('should return null when PM agent does not exist', () => {
+      const scene = new OfficeScene();
+      (scene as any).agents = [];
+      (scene as any).agentMap = new Map();
+      const result = (scene as any).triggerTestTask();
+      expect(result).toBeNull();
+    });
+
+    it('should return task info sent to PM agent (charlie)', () => {
+      const scene = new OfficeScene();
+      const pmAgent = createMockAgent('charlie', 350, 280);
+      pmAgent.isNavigatingToTarget = jest.fn(() => false);
+      (scene as any).agents = [pmAgent];
+      (scene as any).agentMap = new Map([['charlie', pmAgent]]);
+      (scene as any).activeTasks = new Map();
+      (scene as any).roomPositions = { 'pm-office': { x: 350, y: 280 } };
+      (scene as any).eventBus = { emit: jest.fn() };
+      (scene as any).playSound = jest.fn();
+
+      const result = (scene as any).triggerTestTask('写一个博客网站');
+
+      expect(result).not.toBeNull();
+      expect(result.agentId).toBe('charlie');
+      expect(result.description).toBe('写一个博客网站');
+      expect((scene as any).eventBus.emit).toHaveBeenCalled();
+    });
+
+    it('should use a default description from presets when none provided', () => {
+      const scene = new OfficeScene();
+      const pmAgent = createMockAgent('charlie', 350, 280);
+      pmAgent.isNavigatingToTarget = jest.fn(() => false);
+      (scene as any).agents = [pmAgent];
+      (scene as any).agentMap = new Map([['charlie', pmAgent]]);
+      (scene as any).activeTasks = new Map();
+      (scene as any).roomPositions = { 'pm-office': { x: 350, y: 280 } };
+      (scene as any).eventBus = { emit: jest.fn() };
+      (scene as any).playSound = jest.fn();
+
+      const result = (scene as any).triggerTestTask();
+
+      expect(result).not.toBeNull();
+      expect(result.description.length).toBeGreaterThan(0);
+    });
+
+    it('should return null when PM is already busy', () => {
+      const scene = new OfficeScene();
+      const pmAgent = createMockAgent('charlie', 350, 280);
+      pmAgent.isNavigatingToTarget = jest.fn(() => false);
+      (scene as any).agents = [pmAgent];
+      (scene as any).agentMap = new Map([['charlie', pmAgent]]);
+      (scene as any).activeTasks = new Map([['charlie', { agentId: 'charlie', targetX: 0, targetY: 0, returning: false }]]);
+
+      const result = (scene as any).triggerTestTask();
+
+      expect(result).toBeNull();
+    });
+
+    it('should never send task to non-PM agents', () => {
+      const scene = new OfficeScene();
+      const devAgent = createMockAgent('alice', 100, 200);
+      devAgent.isNavigatingToTarget = jest.fn(() => false);
+      const pmAgent = createMockAgent('charlie', 350, 280);
+      pmAgent.isNavigatingToTarget = jest.fn(() => false);
+      (scene as any).agents = [devAgent, pmAgent];
+      (scene as any).agentMap = new Map([['alice', devAgent], ['charlie', pmAgent]]);
+      (scene as any).activeTasks = new Map();
+      (scene as any).roomPositions = { 'pm-office': { x: 350, y: 280 } };
+      (scene as any).eventBus = { emit: jest.fn() };
+      (scene as any).playSound = jest.fn();
+
+      const result = (scene as any).triggerTestTask();
+
+      expect(result).not.toBeNull();
+      expect(result.agentId).toBe('charlie');
+    });
+  });
 });
