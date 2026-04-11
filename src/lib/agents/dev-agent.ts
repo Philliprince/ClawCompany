@@ -1,6 +1,6 @@
 import { BaseAgent } from '../core/base-agent'
 import { Task, AgentResponse, AgentContext, DEFAULT_ROLE_DEFINITIONS, AgentRoleDefinition } from '../core/types'
-import { getLLMProvider } from '../llm/factory'
+import { getLLMProvider, getLLMProviderForAgent } from '../llm/factory'
 import { getAgentExecutor, OpenClawAgentExecutor } from '../gateway/executor'
 import { DevAgentResponseSchema } from './schemas'
 import { sanitizeTaskPrompt } from '../utils/prompt-sanitizer'
@@ -39,7 +39,8 @@ export class DevAgent extends BaseAgent {
     if (process.env.USE_OPENCLAW_GATEWAY === 'true') {
       return 'openclaw'
     }
-    const llmProvider = getLLMProvider()
+    // Use role-specific provider for detection (Dev → Sonnet)
+    const llmProvider = getLLMProviderForAgent('dev') ?? getLLMProvider()
     if (llmProvider) {
       return 'llm'
     }
@@ -61,7 +62,8 @@ export class DevAgent extends BaseAgent {
       case 'openclaw':
         return this.implementWithOpenClaw(task, context)
       case 'llm': {
-        const llmProvider = getLLMProvider()
+        // Dev always uses Sonnet — code generation quality is non-negotiable
+        const llmProvider = getLLMProviderForAgent('dev') ?? getLLMProvider()
         if (llmProvider) {
           return this.implementWithLLM(task, context, llmProvider)
         }

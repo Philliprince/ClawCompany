@@ -6,6 +6,7 @@ import { GLMProvider } from './glm'
 import { MockProvider } from './mock'
 import { GatewayProvider } from './gateway'
 import { AnthropicProvider } from './anthropic'
+import { AgentModelRole, getModelForAgent, describeModelStrategy } from './model-strategy'
 
 export class LLMFactory {
   static createProvider(config: LLMConfig): LLMProvider {
@@ -110,4 +111,78 @@ export function setLLMProvider(provider: LLMProvider | null): void {
 
 export function resetLLMProvider(): void {
   llmProvider = null
+}
+
+// ─── Per-agent LLM provider (hybrid model strategy) ─────────────────────────
+
+// Cache providers keyed by model to avoid repeated instantiation
+const agentProviderCache = new Map<string, LLMProvider>()
+
+/**
+ * Return an LLM provider tuned to the given agent role.
+ *
+ * Falls back to the global provider when the backend is not Anthropic
+ * (GLM / OpenAI don't support per-role cost differentiation right now).
+ *
+ * @param role         Agent role identifier
+ * @param taskDescription  Optional task text for complexity-based escalation (PM only)
+ */
+export function getLLMProviderForAgent(
+  role: AgentModelRole,
+  taskDescription?: string,
+): LLMProvider | null {
+  // Non-Anthropic backends: fall back to the shared global provider
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+  if (!anthropicKey) {
+    return getLLMProvider()
+  }
+
+  // Gateway / Mock modes bypass per-agent routing
+  if (process.env.USE_REAL_GATEWAY === 'true') return getLLMProvider()
+  if (process.env.USE_MOCK_LLM === 'true') return getLLMProvider()
+
+  const model = getModelForAgent(role, taskDescription)
+  const cacheKey = model
+
+  if (agentProviderCache.has(cacheKey)) {
+    return agentProviderCache.get(cacheKey)!
+  }
+
+  const temperature = parseFloat(process.env.LLM_TEMPERATURE || '0.7')
+  const maxTokens = parseInt(process.env.LLM_MAX_TOKENS || '2000', 10)
+  const cacheTTL = (process.env.ANTHROPIC_CACHE_TTL as '5m' | '1h') || '5m'
+
+  console.log(`[LLM Factory] Agent "${role}" → model: ${model}`)
+
+  const provider = LLMFactory.createProvider({
+    provider: 'anthropic',
+    apiKey: anthropicKey,
+    model,
+    temperature,
+    maxTokens,
+    cacheTTL,
+  })
+
+  agentProviderCache.set(cacheKey, provider)
+  return provider
+}
+
+/**
+ * Log the current hybrid model strategy on startup.
+ * Safe to call multiple times (de-duplicated by module-level flag).
+ */
+let strategyLogged = false
+export function logModelStrategyOnce(): void {
+  if (strategyLogged) return
+  strategyLogged = true
+  // Only relevant for Anthropic backend
+  if (process.env.ANTHROPIC_API_KEY) {
+    console.log(describeModelStrategy())
+  }
+}
+
+/** Reset per-agent provider cache (for testing). */
+export function resetAgentProviderCache(): void {
+  agentProviderCache.clear()
+  strategyLogged = false
 }

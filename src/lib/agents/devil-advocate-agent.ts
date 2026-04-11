@@ -159,12 +159,13 @@ export class DevilAdvocateAgent extends BaseAgent {
   }
 
   private async runDA(task: Task, context: AgentContext): Promise<DAResult> {
-    const llm = this.getLLM()
+    // DA requires deep adversarial reasoning — use Sonnet by default
+    const llm = this.getLLMForRole('devil-advocate', task.description) ?? this.getLLM()
 
     if (llm) {
       try {
         const userPrompt = this.buildUserPrompt(task, context)
-        const response = await this.callLLM(this.getSystemPrompt(), userPrompt)
+        const response = await this.callLLMWith(llm, this.getSystemPrompt(), userPrompt)
         if (response) {
           return this.handleLLMResponse(response)
         }

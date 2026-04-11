@@ -2,6 +2,7 @@ import { BaseAgent } from '../core/base-agent'
 import { Task, AgentResponse, AgentContext, AgentRole, DEFAULT_ROLE_DEFINITIONS, AgentRoleDefinition } from '../core/types'
 import { PMAgentResponseSchema } from './schemas'
 import { sanitizeTaskPrompt } from '../utils/prompt-sanitizer'
+import { logModelStrategyOnce } from '../llm/factory'
 
 export class PMAgent extends BaseAgent {
   private roleDefinition: AgentRoleDefinition
@@ -14,6 +15,7 @@ export class PMAgent extends BaseAgent {
       '负责需求分析、任务拆分和团队协调'
     )
     this.roleDefinition = DEFAULT_ROLE_DEFINITIONS['pm']
+    logModelStrategyOnce()
   }
 
   getRoleDefinition(): AgentRoleDefinition {
@@ -23,6 +25,9 @@ export class PMAgent extends BaseAgent {
   async execute(task: Task, context: AgentContext): Promise<AgentResponse> {
     this.log(`分析任务: ${task.title}`)
 
+    // Use role-specific model; PM may escalate to Sonnet for complex tasks
+    const llm = this.getLLMForRole('pm', task.description)
+
     return this.executeWithLLMFallback(
       task,
       context,
@@ -30,6 +35,7 @@ export class PMAgent extends BaseAgent {
       () => this.analyzeAndPlan(task, context),
       this.getSystemPrompt(),
       (t) => this.buildUserPrompt(t),
+      llm ?? undefined,
     )
   }
 

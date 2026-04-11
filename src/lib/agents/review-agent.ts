@@ -23,6 +23,9 @@ export class ReviewAgent extends BaseAgent {
   async execute(task: Task, context: AgentContext): Promise<AgentResponse> {
     this.log(`审查代码: ${task.title}`)
 
+    // Use role-specific model (default: Haiku)
+    const llm = this.getLLMForRole('review', task.description)
+
     return this.executeWithLLMFallback(
       task,
       context,
@@ -30,6 +33,7 @@ export class ReviewAgent extends BaseAgent {
       () => this.review(task, context),
       this.getSystemPrompt(),
       (t, ctx) => this.buildUserPrompt(t, ctx),
+      llm ?? undefined,
     )
   }
 

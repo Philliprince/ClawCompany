@@ -3,7 +3,8 @@ import { z } from 'zod'
 import { AgentRole, AgentResponse, AgentContext, Task, AgentConfig } from './types'
 import { generateId } from '../utils/id'
 import { extractJSONObject } from '../utils/json-parser'
-import { getLLMProvider } from '../llm/factory'
+import { getLLMProvider, getLLMProviderForAgent } from '../llm/factory'
+import { AgentModelRole } from '../llm/model-strategy'
 import { createLogger } from './logger'
 
 export type ParseResultSuccess<T> = { success: true; data: T }
@@ -55,6 +56,14 @@ export abstract class BaseAgent {
     return getLLMProvider()
   }
 
+  /**
+   * Get an LLM provider optimised for this agent's role.
+   * Subclasses should call this instead of getLLM() for cost-aware routing.
+   */
+  protected getLLMForRole(role: AgentModelRole, taskDescription?: string) {
+    return getLLMProviderForAgent(role, taskDescription)
+  }
+
   protected async callLLM(
     systemPrompt: string,
     userPrompt: string
@@ -103,13 +112,14 @@ export abstract class BaseAgent {
     fallbackHandler: () => Promise<T>,
     systemPrompt: string,
     userPromptBuilder: (task: Task, context: AgentContext) => string,
+    llmOverride?: ReturnType<typeof getLLMProvider>,
   ): Promise<T> {
-    const llm = this.getLLM()
+    const llm = llmOverride ?? this.getLLM()
 
     if (llm) {
       try {
         const userPrompt = userPromptBuilder(task, context)
-        const response = await this.callLLM(systemPrompt, userPrompt)
+        const response = await this.callLLMWith(llm, systemPrompt, userPrompt)
         if (response) {
           return llmHandler(response)
         }
@@ -119,6 +129,18 @@ export abstract class BaseAgent {
     }
 
     return fallbackHandler()
+  }
+
+  /** Call a specific LLM provider (bypasses the global singleton). */
+  protected async callLLMWith(
+    llm: NonNullable<ReturnType<typeof getLLMProvider>>,
+    systemPrompt: string,
+    userPrompt: string,
+  ): Promise<string | null> {
+    return llm.chat([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ])
   }
 
   protected buildTaskPrompt(task: Task): string {

@@ -131,13 +131,14 @@ export class ArbiterAgent extends BaseAgent {
     reviewFeedback: string,
     daResult: DAResult | null,
   ): Promise<ArbiterVerdict> {
-    const llm = this.getLLM()
+    // Arbiter makes final verdicts — use Sonnet by default for depth
+    const llm = this.getLLMForRole('arbiter', task.description) ?? this.getLLM()
 
     if (llm) {
       try {
         const systemPrompt = this.getSystemPrompt()
         const userPrompt = this.buildUserPrompt(task, context, reviewFeedback, daResult)
-        const response = await this.callLLM(systemPrompt, userPrompt)
+        const response = await this.callLLMWith(llm, systemPrompt, userPrompt)
         if (response) {
           return this.handleLLMResponse(response, reviewFeedback, daResult)
         }
