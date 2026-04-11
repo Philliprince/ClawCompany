@@ -31,7 +31,7 @@ export type AgentStatus = 'idle' | 'busy' | 'working' | 'offline';
 
 export interface BaseGameEvent {
   type: GameEventType;
-  timestamp: number;
+  timestamp?: number;
   agentId?: string;
 }
 

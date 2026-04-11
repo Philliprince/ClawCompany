@@ -107,6 +107,8 @@ interface MockCookie {
   has: (name: string) => boolean;
   getAll: () => Array<[string, string]>;
   clear: () => void;
+  size: number;
+  [Symbol.iterator]: () => Iterator<[string, string]>;
 }
 
 // 创建cookies mock
@@ -132,7 +134,9 @@ function createMockCookies(headers: Map<string, string>): MockCookie {
     getAll: () => Array.from(cookieMap.entries()),
     clear: () => {
       cookieMap.clear()
-    }
+    },
+    size: cookieMap.size,
+    [Symbol.iterator]: () => cookieMap.entries(),
   }
 }
 

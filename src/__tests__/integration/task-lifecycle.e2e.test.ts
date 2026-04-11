@@ -31,15 +31,19 @@ jest.mock('next/server', () => {
 })
 
 jest.mock('@/lib/gateway/client', () => {
-  const mockClient = {
-    connect: jest.fn().mockResolvedValue(undefined),
-    disconnect: jest.fn().mockResolvedValue(undefined),
-    isConnected: jest.fn().mockReturnValue(true),
-    sessions_send: jest.fn(),
-  }
   return {
-    createGatewayClient: jest.fn(() => mockClient),
-    __mockClient: mockClient,
+    createGatewayClient: jest.fn(() => ({
+      connect: jest.fn().mockResolvedValue(undefined),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+      isConnected: jest.fn().mockReturnValue(true),
+      sessions_send: jest.fn(),
+    })),
+    __mockClient: {
+      connect: jest.fn().mockResolvedValue(undefined),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+      isConnected: jest.fn().mockReturnValue(true),
+      sessions_send: jest.fn(),
+    },
   }
 })
 

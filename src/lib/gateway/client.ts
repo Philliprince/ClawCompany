@@ -279,3 +279,10 @@ export function createGatewayClient(url?: string, options?: GatewayOptions): Ope
     { token: process.env.OPENCLAW_GATEWAY_TOKEN, ...options },
   )
 }
+
+export const __mockClient = {
+  connect: () => Promise.resolve(),
+  disconnect: () => Promise.resolve(),
+  isConnected: () => true,
+  sessions_send: () => {},
+}

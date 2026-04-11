@@ -132,7 +132,7 @@ import type { LLMProvider } from '@/lib/llm/types'
 
 type MockGitManager = { commit: jest.Mock }
 
-const getMockStorageManager = () => (global as Record<string, unknown>).__mockStorageManager__ as ReturnType<typeof import('@/lib/storage/manager').StorageManager['prototype']>
+const getMockStorageManager = () => (global as Record<string, unknown>).__mockStorageManager__ as jest.Mocked<import('@/lib/storage/manager').StorageManager>
 const getMockSandboxedWriter = () => (global as Record<string, unknown>).__mockSandboxedWriter__ as { writeFile: jest.Mock }
 const getMockGitManager = () => (global as Record<string, unknown>).__mockGitManager__ as MockGitManager
 

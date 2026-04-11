@@ -91,6 +91,12 @@ export async function compressHistory(
 
   let summaryContent: string
 
+  // Detect if the first message is already a compaction summary (for iterative update)
+  const firstMsg = olderMessages[0]
+  const isPreviousSummary =
+    firstMsg?.metadata?.taskId === 'context-compression-summary' &&
+    firstMsg.content.startsWith('[历史摘要')
+
   const provider = llm ?? getLLMProvider()
   if (provider) {
     try {
@@ -100,14 +106,82 @@ export async function compressHistory(
         // Guard: don't feed absurdly large text to the LLM
         .slice(0, 60_000)
 
-      const systemPrompt = `你是对话历史压缩助手。请将用户提供的对话历史压缩为结构化摘要。
-要求：
-1. 保留关键决策、任务分配、代码方案、重要结论
-2. 摘要总长度控制在 ${SUMMARY_MAX_CHARS} 字符以内
-3. 使用清晰的中文按时间顺序描述关键事件
-4. 输出格式：纯文本，每条事件一行，以"- "开头`
+      // Estimate a token budget for the summary (~2000 tokens × 4 chars/token)
+      const summaryBudget = Math.min(2000, Math.floor(SUMMARY_MAX_CHARS / 4))
 
-      const userPrompt = `请将以下 ${olderMessages.length} 条对话历史压缩为摘要：\n\n${historyText}`
+      // ─── Hermes-style 8-section summary prompts ─────────────────────────
+      const SECTION_TEMPLATE = `## Goal
+[What the multi-agent team is trying to accomplish for the user]
+
+## Constraints & Preferences
+[User preferences, coding style, constraints, important decisions, tech stack choices]
+
+## Progress
+### Done
+[Completed work — include specific file paths, commands run, results obtained]
+### In Progress
+[Work currently underway or partially completed]
+### Blocked
+[Any blockers, errors, or issues encountered]
+
+## Key Decisions
+[Important technical decisions made by PM/dev/review agents and why]
+
+## Relevant Files
+[Files read, modified, or created — with brief note on each]
+
+## Next Steps
+[What needs to happen next to continue the work]
+
+## Critical Context
+[Any specific values, error messages, configuration details, or data that would be lost without explicit preservation]
+
+## Tools & Patterns
+[Which agent roles were used, how tasks were delegated, any workflow patterns or discoveries]`
+
+      let systemPrompt: string
+      let userPrompt: string
+
+      if (isPreviousSummary) {
+        // Iterative update: incorporate new turns into existing summary
+        const previousSummary = firstMsg.content
+        const newTurnsText = olderMessages
+          .slice(1)
+          .map(m => `[${m.agent}]: ${m.content}`)
+          .join('\n')
+          .slice(0, 50_000)
+
+        systemPrompt = `You are updating a context compaction summary for a multi-agent coding system (ClawCompany). A previous compaction produced the summary below. New conversation turns have occurred since then and need to be incorporated.`
+
+        userPrompt = `PREVIOUS SUMMARY:
+${previousSummary}
+
+NEW TURNS TO INCORPORATE:
+${newTurnsText}
+
+Update the summary using this exact structure. PRESERVE all existing information that is still relevant. ADD new progress. Move items from "In Progress" to "Done" when completed. Remove information only if it is clearly obsolete.
+
+${SECTION_TEMPLATE}
+
+Target ~${summaryBudget} tokens. Be specific — include file paths, command outputs, error messages, and concrete values rather than vague descriptions. The goal is to prevent agents from repeating work or losing important details.
+
+Write only the summary body. Do not include any preamble or prefix.`
+      } else {
+        // First compression
+        systemPrompt = `You are a context compaction assistant for ClawCompany, a multi-agent software development system. Create a structured handoff summary so agents can continue work after earlier turns are compacted.`
+
+        userPrompt = `TURNS TO SUMMARIZE:
+${historyText}
+
+Use this exact structure:
+
+${SECTION_TEMPLATE}
+
+Target ~${summaryBudget} tokens. Be specific — include file paths, command outputs, error messages, and concrete values rather than vague descriptions. The goal is to prevent agents from repeating work or losing important details.
+
+Write only the summary body. Do not include any preamble or prefix.`
+      }
+      // ────────────────────────────────────────────────────────────────────
 
       const response = await provider.chat([
         { role: 'system', content: systemPrompt },

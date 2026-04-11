@@ -67,7 +67,7 @@ export class AgentManager {
     task: Task,
     context: AgentContext,
     options?: { forceDA?: boolean; skipDA?: boolean; skipArbiter?: boolean }
-  ): Promise<{ reviewResult: AgentResponse; daResult?: AgentResponse; arbiterResult?: AgentResponse }> {
+  ): Promise<{ reviewResult: AgentResponse; daResult?: AgentResponse; arbiterResult?: AgentResponse; daGateReason?: string }> {
     // Step 1: 常规 Review
     const reviewResult = await this.executeAgent('review', task, context)
 
@@ -83,7 +83,7 @@ export class AgentManager {
     this.recordDAGateStat(task, reviewMeta?.score, gateDecision.trigger, gateDecision.reason)
 
     if (!gateDecision.trigger) {
-      return { reviewResult }
+      return { reviewResult, daGateReason: gateDecision.reason }
     }
 
     // Step 3: 执行 DA（串行，读取 Review 输出）
@@ -95,7 +95,7 @@ export class AgentManager {
     const daResult = await this.executeAgent('devil-advocate', task, daContext)
 
     if (options?.skipArbiter) {
-      return { reviewResult, daResult }
+      return { reviewResult, daResult, daGateReason: gateDecision.reason }
     }
 
     // Step 4: Arbiter 最终裁决（DA 触发后必然执行）
@@ -110,7 +110,7 @@ export class AgentManager {
     }
 
     const arbiterResult = await this.arbiter.execute(task, arbiterContext)
-    return { reviewResult, daResult, arbiterResult }
+    return { reviewResult, daResult, arbiterResult, daGateReason: gateDecision.reason }
   }
 
   /**
