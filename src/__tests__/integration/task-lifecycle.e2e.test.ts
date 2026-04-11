@@ -113,7 +113,9 @@ import { TaskManager } from '@/lib/tasks/manager'
 import { ChatManager } from '@/lib/chat/manager'
 import { SandboxedFileWriter } from '@/lib/security/sandbox'
 import { AgentRole, AgentResponse, AgentContext, Task } from '@/lib/core/types'
-import { __mockClientWithJest as __mockClient } from '@/lib/gateway/client'
+// __mockClient is provided by jest.mock('@/lib/gateway/client') above — no import needed
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const __mockClient = (jest.requireMock('@/lib/gateway/client') as any).__mockClient
 import type { GameEvent } from '@/game/types/GameEvents'
 
 const API_KEY = 'test-api-key-12345678901234567890'
