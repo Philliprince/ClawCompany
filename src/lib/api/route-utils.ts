@@ -98,28 +98,20 @@ export function errorResponse(error: unknown, status?: number, context?: string)
 
 export function successResponse(data: Record<string, unknown>, request?: NextRequest): NextResponse {
   const response: Record<string, unknown> = { success: true, ...data }
+  const responseHeaders: Record<string, string> = {}
 
   if (request) {
     const clientId = getClientId(request)
     // Use getRemaining (non-consuming) — the token was already consumed by checkRateLimit/withRateLimit
     const remaining = getRateLimitRemaining(clientId)
     response.remaining = remaining
+    responseHeaders['X-RateLimit-Limit'] = '10'
+    responseHeaders['X-RateLimit-Remaining'] = String(remaining)
+    // Reset = now + window (approximate; sliding window resets are per-request)
+    responseHeaders['X-RateLimit-Reset'] = String(Math.ceil((Date.now() + 60000) / 1000))
   }
 
-  const nextResponse = NextResponse.json(response)
-
-  if (request) {
-    const clientId = getClientId(request)
-    // Re-use getRemaining for headers — no extra token consumed
-    const remaining = getRateLimitRemaining(clientId)
-    const stats = { limit: 10, windowMs: 60000 }
-    nextResponse.headers.set('X-RateLimit-Limit', String(stats.limit))
-    nextResponse.headers.set('X-RateLimit-Remaining', String(remaining))
-    // Reset = now + remaining window (approximate; accurate reset is tracked in check())
-    nextResponse.headers.set('X-RateLimit-Reset', String(Math.ceil((Date.now() + stats.windowMs) / 1000)))
-  }
-
-  return nextResponse
+  return NextResponse.json(response, { headers: responseHeaders })
 }
 
 type RouteHandler = (request: NextRequest) => Promise<NextResponse>
