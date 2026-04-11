@@ -198,6 +198,12 @@ export interface AgentContext {
   reviewFeedback?: string
   /** Devil's Advocate 评估反馈（Challenge Ledger JSON 字符串） */
   daFeedback?: string
+  /**
+   * Short-term memory hints injected from WorkingMemory.
+   * Each entry is a formatted string: "[role/key]: value"
+   * Agents can optionally include these in their prompts for continuity.
+   */
+  memoryHints?: string[]
 }
 
 export interface ChatMessage {

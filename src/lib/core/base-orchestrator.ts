@@ -12,6 +12,7 @@ import {
 } from './types'
 import { compressHistory } from '../chat/compression'
 import { FileSnapshotManager } from '../tasks/file-snapshot-manager'
+import { WorkingMemory } from '../memory/working-memory'
 import { DAGateReason } from '../agents/devil-advocate-agent'
 import { Logger, LogEntry } from './logger'
 import { PerformanceMonitor } from './performance-monitor'
@@ -83,6 +84,10 @@ export abstract class BaseOrchestrator {
   private capturedLogs: LogEntry[] = []
   /** Shadow-git based snapshot manager — lazily initialized per project dir */
   private snapshotManager: FileSnapshotManager | null = null
+  /** Working memory — lazily initialized */
+  private workingMemory: WorkingMemory | null = null
+  /** Current session ID for memory scoping */
+  protected sessionId: string = `session-${Date.now()}`
 
   constructor(retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig) {
     this.retry = new UnifiedRetry({
@@ -261,6 +266,18 @@ export abstract class BaseOrchestrator {
       tasks,
       files,
       chatHistory,
+      ...(this.buildMemoryHints().length > 0 ? { memoryHints: this.buildMemoryHints() } : {}),
+    }
+  }
+
+  private buildMemoryHints(): string[] {
+    try {
+      const mem = this.getWorkingMemory()
+      if (!mem) return []
+      const entries = mem.getTopMemories(this.sessionId, 5)
+      return entries.map(e => `[${e.agentRole}/${e.key}]: ${e.value}`)
+    } catch {
+      return []
     }
   }
 
@@ -403,6 +420,39 @@ export abstract class BaseOrchestrator {
       data: { dependency: unresolvedDep, reason: 'Dependency not completed' },
     })
     return true
+  }
+
+  // ─── Working Memory helpers ───────────────────────────────────
+
+  private getWorkingMemory(): WorkingMemory | null {
+    if (this.workingMemory) return this.workingMemory
+    try {
+      this.workingMemory = WorkingMemory.getInstance()
+      return this.workingMemory
+    } catch (err) {
+      this.logWarn('[WorkingMemory] Failed to initialize', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return null
+    }
+  }
+
+  /**
+   * Store a memory entry for the current session.
+   * Silently no-ops if memory system is unavailable.
+   */
+  protected rememberFact(
+    agentRole: string,
+    key: string,
+    value: string,
+    importance: number = 0.5,
+    ttlMs?: number,
+  ): void {
+    try {
+      this.getWorkingMemory()?.remember(this.sessionId, agentRole, key, value, importance, ttlMs)
+    } catch (err) {
+      this.logWarn('[WorkingMemory] remember failed', { key, error: err instanceof Error ? err.message : String(err) })
+    }
   }
 
   // ─── Snapshot helpers ─────────────────────────────────────────
@@ -594,6 +644,14 @@ export abstract class BaseOrchestrator {
       if (snapshotId) {
         this.rollbackToSnapshot(snapshotId)
       }
+
+      // ─── Remember review feedback for next iteration ──────────
+      this.rememberFact(
+        'review',
+        `last_feedback_task_${task.id}`,
+        finalResponse.message.slice(0, 500),
+        0.9,  // high importance — directly influences next dev iteration
+      )
 
       // Pass review feedback (from arbiter if available) into the next dev iteration
       this.logInfo('Review not approved, retrying dev with feedback', {
