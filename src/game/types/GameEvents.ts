@@ -249,9 +249,13 @@ export type GameEvent =
   | PmAnalysisCompleteEvent
   | DevIterationStartEvent
   | ReviewRejectedEvent
+  | WorkflowStartedEvent
+  | WorkflowCompletedEvent
   | WorkflowIterationCompleteEvent
   | CostUpdateEvent
-  | CostBudgetExceededEvent;
+  | CostBudgetExceededEvent
+  | TaskSubmittedEvent
+  | TaskStartedEvent;
 
 export type GameEventHandler<T extends GameEvent = GameEvent> = (event: T) => void;
 
@@ -272,10 +276,14 @@ export interface EventTypeMap {
   'task:completed': TaskVisualizationCompletedEvent;
   'task:failed': TaskVisualizationFailedEvent;
   'task:handover': TaskVisualizationHandoverEvent;
+  'task:submitted': TaskSubmittedEvent;
+  'task:started': TaskStartedEvent;
   'openclaw:send': OpenClawSendEvent;
   'pm:analysis-complete': PmAnalysisCompleteEvent;
   'dev:iteration-start': DevIterationStartEvent;
   'review:rejected': ReviewRejectedEvent;
+  'workflow:started': WorkflowStartedEvent;
+  'workflow:completed': WorkflowCompletedEvent;
   'workflow:iteration-complete': WorkflowIterationCompleteEvent;
   'cost:update': CostUpdateEvent;
   'cost:budget-exceeded': CostBudgetExceededEvent;
