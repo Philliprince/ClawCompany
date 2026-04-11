@@ -15,6 +15,13 @@ const MAX_SSE_PER_IP = 5;
 const activeConnections = new Map<string, number>(); // ip → count
 let totalConnections = 0;
 
+// ── SSE Heartbeat 配置 ────────────────────────────────────────
+// 根据研究：proxy 超时通常 60 秒，最佳实践是 75% 规则（25 秒）
+// 参考：https://www.websocket.org/guides/heartbeat/ - "25 seconds is the sweet spot"
+// Nginx 默认 60s，AWS ALB 60s，Google Cloud LB 30s
+const SSE_HEARTBEAT_INTERVAL_MS = 25_000;
+const SSE_RETRY_INTERVAL_MS = 5_000;
+
 function acquireConnection(ip: string): boolean {
   if (totalConnections >= MAX_SSE_CONNECTIONS) return false;
   const ipCount = activeConnections.get(ip) ?? 0;
@@ -80,7 +87,7 @@ export async function GET(request: NextRequest) {
         };
 
         sendEvent(
-          { type: 'connection:open', timestamp: Date.now(), url: request.url },
+          { type: 'connection:open', timestamp: Date.now(), url: request.url, retryMs: SSE_RETRY_INTERVAL_MS },
           'connection',
           String(Date.now())
         );
@@ -105,15 +112,14 @@ export async function GET(request: NextRequest) {
 
         const keepalive = setInterval(() => {
           try {
-            controller.enqueue(encoder.encode(': keepalive\n\n'));
+            controller.enqueue(encoder.encode(`: ping\n\n`));
           } catch {
             clearInterval(keepalive);
             unsubscribe();
           }
-        }, 30000);
+        }, SSE_HEARTBEAT_INTERVAL_MS);
 
-        // 3. 断开时清理连接计数
-        request.signal.addEventListener('abort', () => {
+        const cleanup = () => {
           clearInterval(keepalive);
           unsubscribe();
           safeReleaseConnection();
@@ -122,11 +128,13 @@ export async function GET(request: NextRequest) {
           } catch {
             // already closed
           }
-        });
+        };
+
+        // 3. 断开时清理连接计数
+        request.signal.addEventListener('abort', cleanup);
       },
       cancel() {
-        // Ensure connection is released if the stream is cancelled for any reason
-        safeReleaseConnection();
+        cleanup();
       },
     });
   } catch (err) {
@@ -139,8 +147,9 @@ export async function GET(request: NextRequest) {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
+      'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
+      'Retry-After': String(SSE_RETRY_INTERVAL_MS / 1000),
     },
   });
 }
