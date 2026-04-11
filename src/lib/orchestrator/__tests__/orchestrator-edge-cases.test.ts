@@ -15,7 +15,7 @@ describe('Orchestrator - Edge Cases', () => {
   const fastRetry = { maxRetries: 1, initialDelay: 1, maxDelay: 10, backoffMultiplier: 1 }
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    jest.resetAllMocks()
     orchestrator = new Orchestrator('test-edge', fastRetry)
 
     ;(chatManager.sendUserMessage as jest.Mock).mockImplementation(() => {})

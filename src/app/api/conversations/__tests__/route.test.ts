@@ -3,6 +3,7 @@ jest.mock('next/server', () => ({
     json: (data: unknown, options?: { status?: number }) => ({
       json: async () => data,
       status: options?.status || 200,
+      headers: { set: jest.fn(), get: jest.fn() },
     }),
   },
 }))
@@ -20,6 +21,10 @@ jest.mock('@/lib/storage/manager', () => {
     StorageManager: jest.fn().mockImplementation(() => mockStorageManager),
   }
 })
+
+jest.mock('@/lib/security/rate-limiter', () => ({
+  check: jest.fn(() => ({ allowed: true, remaining: 60, limit: 100, resetAt: Date.now() + 60000, retryAfter: 0 })),
+}))
 
 jest.mock('@/lib/security/utils', () => ({
   InputValidator: {
@@ -39,6 +44,7 @@ jest.mock('@/lib/security/utils', () => ({
 import { POST, GET, PUT, DELETE } from '../route'
 
 import { RateLimiter } from '@/lib/security/utils'
+import { check as slidingWindowCheck } from '@/lib/security/rate-limiter'
 
 const API_KEY = 'test-api-key-12345678901234567890'
 
@@ -221,6 +227,7 @@ describe('/api/conversations', () => {
     it('should enforce rate limiting', async () => {
       ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(false)
       ;(RateLimiter.getRemaining as jest.Mock).mockReturnValue(0)
+      ;(slidingWindowCheck as jest.Mock).mockReturnValueOnce({ allowed: false, remaining: 0, limit: 100, resetAt: Date.now() + 60000, retryAfter: 30 })
 
       const request = createMockRequest({ body: { title: 'Test' } })
       const response = await POST(request)
