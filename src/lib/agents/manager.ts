@@ -4,10 +4,11 @@ import { PMAgent } from './pm-agent'
 import { DevAgent } from './dev-agent'
 import { ReviewAgent } from './review-agent'
 import { TestAgent } from './test-agent'
-import { DevilAdvocateAgent, shouldTriggerDA } from './devil-advocate-agent'
+import { DevilAdvocateAgent, evaluateDAGate } from './devil-advocate-agent'
 import { ArbiterAgent } from './arbiter-agent'
 import { BaseAgent } from '../core/base-agent'
 import { AgentRole, Task, AgentResponse, AgentContext } from './types'
+import { DPScoreStore } from '../analytics/dp-score-store'
 
 export class AgentManager {
   private agents: Map<AgentRole, BaseAgent>
@@ -50,7 +51,10 @@ export class AgentManager {
    *
    * 流程：
    * 1. Review Agent 审查
-   * 2. 判断是否触发 DA（根据任务关键词 + Review 分数）
+   * 2. 智能门控判断是否触发 DA（根据 Review 分数 + 高危关键词）
+   *    - 高分（>85）且无高危标记 → 跳过 DA（节省成本）
+   *    - 低分（<60）或高危关键词 → 强制 DA
+   *    - 中间分数（60-85）→ 随机 30% 采样 DA（持续质量监控）
    * 3. 若触发 DA，串行执行（DA 读取 Review 输出）
    * 4. 若 DA 被触发，由 Arbiter 做最终裁决（综合 Critic + DA）
    * 5. 返回最终结果（含各阶段产出）
@@ -67,18 +71,18 @@ export class AgentManager {
     // Step 1: 常规 Review
     const reviewResult = await this.executeAgent('review', task, context)
 
-    if (options?.skipDA) {
-      return { reviewResult }
-    }
-
-    // Step 2: 判断是否触发 DA
+    // Step 2: 智能门控判断是否触发 DA
     const reviewMeta = reviewResult.metadata as { approved?: boolean; score?: number } | undefined
     const reviewForDA = reviewMeta?.approved !== undefined
       ? { approved: reviewMeta.approved, score: reviewMeta.score }
       : undefined
-    const triggerDA = shouldTriggerDA(task, reviewForDA, options)
 
-    if (!triggerDA) {
+    const gateDecision = evaluateDAGate(task, reviewForDA, options)
+
+    // 记录 DA 门控统计到 DP Score 数据库
+    this.recordDAGateStat(task, reviewMeta?.score, gateDecision.trigger, gateDecision.reason)
+
+    if (!gateDecision.trigger) {
       return { reviewResult }
     }
 
@@ -107,6 +111,33 @@ export class AgentManager {
 
     const arbiterResult = await this.arbiter.execute(task, arbiterContext)
     return { reviewResult, daResult, arbiterResult }
+  }
+
+  /**
+   * 记录 DA 门控统计事件到 DP Score 数据库
+   * 使用 task_type = 'da_gate' 以便与 Review 记录区分
+   */
+  private recordDAGateStat(
+    task: Task,
+    reviewScore: number | undefined,
+    triggered: boolean,
+    reason: string,
+  ): void {
+    try {
+      const store = DPScoreStore.getInstance()
+      store.save({
+        task_id: `da_gate:${task.id}`,
+        timestamp: Date.now(),
+        proposer_score: reviewScore ?? 0,
+        critic_score: reviewScore ?? 0,
+        // 用 dp_score 编码门控结果：100 = 触发，0 = 跳过
+        dp_score: triggered ? 100 : 0,
+        task_type: `da_gate:${reason}`,
+        independence_penalty: triggered ? 1.0 : 0.0,
+      })
+    } catch {
+      // 统计失败不影响主流程
+    }
   }
 
   getAgentInfo(): Array<{ id: string; name: string; role: AgentRole; description: string }> {

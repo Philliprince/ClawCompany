@@ -814,25 +814,62 @@ ${previousChallengesText}
 // ─── DA 触发条件判断 ──────────────────────────────────────────────
 
 /**
- * 判断是否应该触发 Devil's Advocate 审查
- *
- * 触发条件：
- * 1. 任务包含架构/安全/不可逆操作关键词
- * 2. Review 批准率异常高（疑似伪对抗）
- * 3. 显式要求 DA 介入
+ * DA 智能门控结果
  */
-export function shouldTriggerDA(
+export interface DAGateDecision {
+  /** 是否触发 DA */
+  trigger: boolean
+  /** 决策原因 */
+  reason: DAGateReason
+  /** 采样概率（中间分数时为 0.3，其他情况为 0 或 1） */
+  samplingRate: number
+}
+
+export type DAGateReason =
+  | 'force'           // 显式强制
+  | 'skip'            // 显式跳过
+  | 'high_risk_keyword'  // 高危关键词
+  | 'low_score'       // Review 低分（< 60）
+  | 'high_score_skip' // Review 高分（> 85）且无高危标记 → 跳过
+  | 'sampling'        // 中间分数（60-85）随机 30% 采样
+  | 'over_confident'  // Review 评分异常高（≥ 95，疑似伪对抗）
+  | 'no_score'        // 无 Review 分数 → 保守触发
+
+/**
+ * 判断是否应该触发 Devil's Advocate 审查（智能门控版本）
+ *
+ * 门控规则（成本优化）：
+ * 1. 显式 forceDA → 强制触发
+ * 2. 显式 skipDA  → 强制跳过
+ * 3. 任务含高危关键词（安全/支付/架构等）→ 强制触发
+ * 4. Review 低分（< 60）→ 强制触发
+ * 5. Review 高分（> 85）且无高危关键词 → 跳过（节省成本）
+ * 6. Review 中间分数（60-85）→ 随机 30% 采样（持续质量监控）
+ * 7. Review 评分异常高（≥ 95，疑似伪对抗）→ 强制触发
+ * 8. 无 Review 分数 → 保守触发
+ *
+ * 预期节省成本：~55% 的 DA 调用可以跳过
+ */
+export function evaluateDAGate(
   task: Task,
   reviewResult?: { approved: boolean; score?: number },
-  options?: { forceDA?: boolean }
-): boolean {
-  if (options?.forceDA) return true
+  options?: { forceDA?: boolean; skipDA?: boolean },
+  /** 可注入随机数（0-1），默认 Math.random()，便于测试 */
+  random: number = Math.random(),
+): DAGateDecision {
+  // 优先级最高：显式 force/skip
+  if (options?.forceDA) {
+    return { trigger: true, reason: 'force', samplingRate: 1 }
+  }
+  if (options?.skipDA) {
+    return { trigger: false, reason: 'skip', samplingRate: 0 }
+  }
 
   const title = task.title.toLowerCase()
   const description = task.description.toLowerCase()
   const combined = `${title} ${description}`
 
-  // 关键词触发
+  // 高危关键词 → 强制触发（不管分数）
   const highRiskKeywords = [
     'auth', 'authentication', '认证', '授权', 'security', '安全',
     'database', '数据库', 'migration', '迁移', 'delete', '删除',
@@ -840,14 +877,47 @@ export function shouldTriggerDA(
     'payment', '支付', 'password', '密码', 'token', 'secret',
     'deploy', '部署', 'production', '生产',
   ]
-
   const hasHighRiskKeyword = highRiskKeywords.some(kw => combined.includes(kw))
-  if (hasHighRiskKeyword) return true
-
-  // Review 批准分数异常高（可能是伪对抗）
-  if (reviewResult?.approved && reviewResult?.score && reviewResult.score >= 95) {
-    return true
+  if (hasHighRiskKeyword) {
+    return { trigger: true, reason: 'high_risk_keyword', samplingRate: 1 }
   }
 
-  return false
+  const score = reviewResult?.score
+
+  // 无分数 → 保守触发
+  if (score === undefined || score === null) {
+    return { trigger: true, reason: 'no_score', samplingRate: 1 }
+  }
+
+  // Review 评分异常高（≥ 95，疑似伪对抗）→ 强制触发
+  if (reviewResult?.approved && score >= 95) {
+    return { trigger: true, reason: 'over_confident', samplingRate: 1 }
+  }
+
+  // 低分（< 60）→ 强制触发
+  if (score < 60) {
+    return { trigger: true, reason: 'low_score', samplingRate: 1 }
+  }
+
+  // 高分（> 85）且无高危标记 → 跳过（节省成本）
+  if (score > 85) {
+    return { trigger: false, reason: 'high_score_skip', samplingRate: 0 }
+  }
+
+  // 中间分数（60-85）→ 随机 30% 采样
+  const triggered = random < 0.3
+  return { trigger: triggered, reason: 'sampling', samplingRate: 0.3 }
+}
+
+/**
+ * 判断是否应该触发 Devil's Advocate 审查（兼容旧接口）
+ *
+ * @deprecated 请使用 evaluateDAGate() 以获取详细的决策信息
+ */
+export function shouldTriggerDA(
+  task: Task,
+  reviewResult?: { approved: boolean; score?: number },
+  options?: { forceDA?: boolean }
+): boolean {
+  return evaluateDAGate(task, reviewResult, options).trigger
 }
