@@ -99,7 +99,7 @@ import { AgentManager } from '@/lib/agents/manager'
 import { TaskManager } from '@/lib/tasks/manager'
 import { ChatManager } from '@/lib/chat/manager'
 import { SandboxedFileWriter } from '@/lib/security/sandbox'
-import { AgentRole, AgentResponse } from '@/lib/core/types'
+import { AgentRole, AgentResponse, AgentContext, Task } from '@/lib/core/types'
 import { __mockClient } from '@/lib/gateway/client'
 import type { GameEvent } from '@/game/types/GameEvents'
 
@@ -163,6 +163,14 @@ describe('Task Lifecycle E2E Integration', () => {
       getAgentInfo: jest.fn(),
     } as jest.Mocked<AgentManager>
 
+    // Make executeReviewPipeline delegate to executeAgent('review') for backward compat
+    ;(mockAgentManager.executeReviewPipeline as jest.Mock).mockImplementation(
+      async (task: Task, context: AgentContext) => {
+        const reviewResult = await (mockAgentManager.executeAgent as jest.Mock)('review', task, context)
+        return { reviewResult, daTriggered: false }
+      }
+    )
+
     const chatMessages: Array<{ agent: 'user' | AgentRole; content: string; timestamp: Date }> = []
     mockChatManager = {
       sendUserMessage: jest.fn((msg: string) => {
@@ -223,6 +231,7 @@ describe('Task Lifecycle E2E Integration', () => {
                   title: '创建 hello world 页面',
                   description: '创建一个简单的 hello world 页面',
                   assignedTo: 'dev',
+                  status: 'pending',
                   dependencies: [],
                   files: [],
                 },
@@ -230,6 +239,7 @@ describe('Task Lifecycle E2E Integration', () => {
                   title: '编写测试用例',
                   description: '为 hello world 页面编写测试',
                   assignedTo: 'tester',
+                  status: 'pending',
                   dependencies: [],
                   files: [],
                 },
@@ -393,6 +403,7 @@ describe('Task Lifecycle E2E Integration', () => {
                   title: '创建页面',
                   description: '创建页面',
                   assignedTo: 'dev',
+                  status: 'pending',
                   dependencies: [],
                   files: [],
                 },
@@ -672,7 +683,7 @@ describe('Task Lifecycle E2E Integration', () => {
             return {
               agent: 'pm',
               message: 'Task created',
-              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', dependencies: [], files: [] }],
+              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] }],
               status: 'success',
             }
           }

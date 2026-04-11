@@ -181,7 +181,7 @@ export interface FileChange {
 export interface AgentResponse {
   agent: AgentRole
   message: string
-  tasks?: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[]
+  tasks?: (Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'status'> & { status?: TaskStatus })[]
   files?: FileChange[]
   nextAgent?: AgentRole
   status: 'success' | 'error' | 'need_input'

@@ -3,7 +3,7 @@ import { AgentManager } from '@/lib/agents/manager'
 import { TaskManager } from '@/lib/tasks/manager'
 import { ChatManager } from '@/lib/chat/manager'
 import { SandboxedFileWriter } from '@/lib/security/sandbox'
-import { AgentRole, AgentResponse, FileChange, Task } from '@/lib/core/types'
+import { AgentRole, AgentResponse, FileChange, Task, AgentContext } from '@/lib/core/types'
 
 interface ExecutionLogEntry {
   role: AgentRole | 'user'
@@ -31,6 +31,14 @@ describe('Task Lifecycle E2E', () => {
       executeReviewPipeline: jest.fn(),
       getAgentInfo: jest.fn(),
     } as jest.Mocked<AgentManager>
+
+    // Make executeReviewPipeline delegate to executeAgent('review') for backward compat
+    ;(mockAgentManager.executeReviewPipeline as jest.Mock).mockImplementation(
+      async (task: Task, context: AgentContext) => {
+        const reviewResult = await (mockAgentManager.executeAgent as jest.Mock)('review', task, context)
+        return { reviewResult, daTriggered: false }
+      }
+    )
 
     const chatMessages: Array<{ agent: 'user' | AgentRole; content: string; timestamp: Date }> = []
     mockChatManager = {
@@ -88,6 +96,7 @@ describe('Task Lifecycle E2E', () => {
                   title: '创建 hello world 页面',
                   description: '创建一个简单的 hello world 页面',
                   assignedTo: 'dev',
+                  status: 'pending',
                   dependencies: [],
                   files: [],
                 },
@@ -95,6 +104,7 @@ describe('Task Lifecycle E2E', () => {
                   title: '编写测试用例',
                   description: '为 hello world 页面编写测试',
                   assignedTo: 'tester',
+                  status: 'pending',
                   dependencies: [],
                   files: [],
                 },
@@ -165,7 +175,7 @@ describe('Task Lifecycle E2E', () => {
             return {
               agent: 'pm',
               message: 'Task analyzed',
-              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', dependencies: [], files: [] }],
+              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] }],
               status: 'success',
             }
           }
@@ -256,7 +266,7 @@ describe('Task Lifecycle E2E', () => {
             return {
               agent: 'pm',
               message: 'Task created',
-              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', dependencies: [], files: [] }],
+              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] }],
               status: 'success',
             }
           }
@@ -294,7 +304,7 @@ describe('Task Lifecycle E2E', () => {
             return {
               agent: 'pm',
               message: 'Task created',
-              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', dependencies: [], files: [] }],
+              tasks: [{ title: 'Task', description: 'Task', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] }],
               status: 'success',
             }
           }
@@ -333,8 +343,8 @@ describe('Task Lifecycle E2E', () => {
               agent: 'pm',
               message: 'Done',
               tasks: [
-                { title: 'T1', description: 'T1', assignedTo: 'dev', dependencies: [], files: [] },
-                { title: 'T2', description: 'T2', assignedTo: 'dev', dependencies: [], files: [] },
+                { title: 'T1', description: 'T1', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] },
+                { title: 'T2', description: 'T2', assignedTo: 'dev', status: 'pending', dependencies: [], files: [] },
               ],
               status: 'success',
             }
