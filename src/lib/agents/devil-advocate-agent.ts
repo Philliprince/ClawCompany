@@ -126,7 +126,7 @@ export class DevilAdvocateAgent extends BaseAgent {
     super(
       'devil-advocate-1',
       'Devil\'s Advocate Claw',
-      'review',
+      'devil-advocate',
       '对抗性审查：质疑基本假设，寻找极端情况和灾难性失败模式'
     )
   }

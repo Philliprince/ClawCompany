@@ -65,7 +65,9 @@ describe('Animation System Performance', () => {
 
       expect(sprite.scene.anims.get).toHaveBeenCalled();
       const calledKey = sprite.scene.anims.get.mock.calls[0][0];
-      expect(calledKey).toMatch(/^moving_\d+$/);
+      // Key format: "${role}_${suffix}" where role is the numeric color as a string
+      // e.g. 0xff6b6b → "16734059_walk"
+      expect(calledKey).toMatch(/^\d+_walk$/);
     });
 
     it('should handle rapid state changes with cooldown', () => {

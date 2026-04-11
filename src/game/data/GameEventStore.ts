@@ -68,8 +68,10 @@ processEmitter.setMaxListeners(500); // Allow many SSE connections
 
 // ── Redis Pub/Sub transport (multi-worker, optional) ──────────────────────────
 
-let redisPub: import('ioredis').Redis | null = null;
-let redisSub: import('ioredis').Redis | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let redisPub: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let redisSub: any = null;
 let redisReady = false;
 
 /**
@@ -81,6 +83,8 @@ async function maybeInitRedis(): Promise<void> {
   if (!url || redisReady) return;
   try {
     // Dynamic import — won't crash if ioredis is not installed
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore: ioredis is an optional peer dependency
     const { default: Redis } = await import('ioredis');
     redisPub = new Redis(url, { lazyConnect: true, enableReadyCheck: false });
     redisSub = new Redis(url, { lazyConnect: true, enableReadyCheck: false });

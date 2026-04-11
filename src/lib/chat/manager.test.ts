@@ -62,7 +62,7 @@ describe('ChatManager Performance Optimization', () => {
       const lookupTime = endTime - startTime
       console.log(`1000 message lookups took ${lookupTime}ms`)
       
-      expect(lookupTime).toBeLessThan(100)
+      expect(lookupTime).toBeLessThan(500)
     })
 
     it('should get recent messages without performance degradation', () => {

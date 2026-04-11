@@ -45,6 +45,12 @@ const agentConfig = {
     color: 'bg-red-700',
     borderColor: 'border-red-500',
   },
+  arbiter: {
+    name: 'Arbiter Claw',
+    avatar: '⚖️',
+    color: 'bg-yellow-700',
+    borderColor: 'border-yellow-500',
+  },
 }
 
 export default function ChatPage() {
