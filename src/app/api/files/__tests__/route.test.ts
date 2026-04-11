@@ -70,7 +70,7 @@ interface MockRequest {
   json: () => Promise<Record<string, unknown>>;
 }
 
-function createMockRequest(options?: MockRequestOptions): MockRequest {
+function createMockRequest(options?: MockRequestOptions): any {
   const url = options?.url || 'http://localhost/api/files'
   const headers: Record<string, string | undefined> = {
     'x-api-key': options?.noAuth ? undefined : API_KEY,

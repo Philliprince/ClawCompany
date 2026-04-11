@@ -37,7 +37,7 @@ import { POST, GET, PUT, DELETE } from '../route'
 import { createMockNextRequest } from '@/test-utils/next-request-mock'
 
 // 保持向后兼容性的包装函数
-function createMockRequest(options?: MockRequestOptions): NextRequest {
+function createMockRequest(options?: MockRequestOptions): any {
   return createMockNextRequest(options) as unknown as NextRequest
 }
 

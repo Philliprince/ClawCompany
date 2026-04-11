@@ -73,7 +73,12 @@ describe('E2E - Sidekick Task Dispatch Workflow', () => {
       deleteFile: jest.fn(),
       listFiles: jest.fn().mockResolvedValue([]),
       exists: jest.fn().mockResolvedValue(false),
-    } as jest.Mocked<SandboxedFileWriter>
+      validatePath: jest.fn().mockReturnValue({ allowed: true, sanitizedPath: 'test.txt' }),
+      validateContent: jest.fn().mockReturnValue({ allowed: true }),
+      readAllowed: jest.fn().mockResolvedValue({ success: true, content: '' }),
+      getSandboxDir: jest.fn().mockReturnValue('/sandbox'),
+      getAllowedExtensions: jest.fn().mockReturnValue(['.txt', '.json']),
+    } as unknown as jest.Mocked<SandboxedFileWriter>
 
     // Allow all status transitions for testing (bypass state machine)
     jest.spyOn(realTaskManager, 'updateTaskStatus').mockImplementation(

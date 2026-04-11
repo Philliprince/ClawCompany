@@ -48,10 +48,8 @@ import { check as slidingWindowCheck } from '@/lib/security/rate-limiter'
 
 const API_KEY = 'test-api-key-12345678901234567890'
 
-import { createMockNextRequest as createMockRequest } from '@/test-utils/next-request-mock'
-
 // 使用统一的 MockRequest 格式
-function createMockRequest(options?: MockRequestOptions) {
+function createMockRequest(options?: any) {
   const url = options?.url || 'http://localhost/api/conversations'
   const headers: Record<string, string> = {
     'x-forwarded-for': '1.2.3.4',
@@ -89,7 +87,7 @@ describe('Authentication', () => {
 
   it('POST should return 401 without API key', async () => {
     const request = createMockRequest({ noAuth: true, body: { title: 'Test' } })
-    const response = await POST(request)
+    const response = await POST(request as unknown as any)
     const data = await response.json()
     expect(response.status).toBe(401)
     expect(data.error).toContain('Unauthorized')
@@ -97,7 +95,7 @@ describe('Authentication', () => {
 
   it('GET should return 401 without API key', async () => {
     const request = createMockRequest({ noAuth: true, url: 'http://localhost/api/conversations' })
-    const response = await GET(request)
+    const response = await GET(request as unknown as any)
     const data = await response.json()
     expect(response.status).toBe(401)
     expect(data.error).toContain('Unauthorized')
@@ -105,7 +103,7 @@ describe('Authentication', () => {
 
   it('PUT should return 401 without API key', async () => {
     const request = createMockRequest({ noAuth: true, body: { conversationId: 'conv-1', title: 'New' } })
-    const response = await PUT(request)
+    const response = await PUT(request as unknown as any)
     const data = await response.json()
     expect(response.status).toBe(401)
     expect(data.error).toContain('Unauthorized')
@@ -113,14 +111,14 @@ describe('Authentication', () => {
 
   it('DELETE should return 401 without API key', async () => {
     const request = createMockRequest({ noAuth: true, url: 'http://localhost/api/conversations?id=conv-1' })
-    const response = await DELETE(request)
+    const response = await DELETE(request as unknown as any)
     const data = await response.json()
     expect(response.status).toBe(401)
     expect(data.error).toContain('Unauthorized')
   })
 })
 
-const getMockStorage = () => (global as Record<string, unknown>).__mockConvStorageManager__
+const getMockStorage = () => (global as Record<string, unknown>).__mockConvStorageManager__ as any
 
 describe('/api/conversations', () => {
   const originalApiKey = process.env.AGENT_API_KEY
@@ -167,7 +165,7 @@ describe('/api/conversations', () => {
         body: { title: 'Test Conversation' },
       })
 
-      const response = await POST(request)
+      const response = await POST(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -179,7 +177,7 @@ describe('/api/conversations', () => {
 
     it('should reject missing title', async () => {
       const request = createMockRequest({ body: {} })
-      const response = await POST(request)
+      const response = await POST(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -189,7 +187,7 @@ describe('/api/conversations', () => {
 
     it('should reject non-string title', async () => {
       const request = createMockRequest({ body: { title: 123 } })
-      const response = await POST(request)
+      const response = await POST(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -198,7 +196,7 @@ describe('/api/conversations', () => {
 
     it('should reject null title', async () => {
       const request = createMockRequest({ body: { title: null } })
-      const response = await POST(request)
+      const response = await POST(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -213,7 +211,7 @@ describe('/api/conversations', () => {
         body: { title: '<script>alert("xss")</script>Hello' },
       })
 
-      await POST(request)
+      await POST(request as unknown as any)
       expect(storage.createConversation).toHaveBeenCalledWith(
         '&lt;script&gt;alert(&quot;xss&quot;)&lt;&#x2F;script&gt;Hello'
       )
@@ -225,7 +223,7 @@ describe('/api/conversations', () => {
       ;(slidingWindowCheck as jest.Mock).mockReturnValueOnce({ allowed: false, remaining: 0, limit: 100, resetAt: Date.now() + 60000, retryAfter: 30 })
 
       const request = createMockRequest({ body: { title: 'Test' } })
-      const response = await POST(request)
+      const response = await POST(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(429)
@@ -245,7 +243,7 @@ describe('/api/conversations', () => {
         url: 'http://localhost/api/conversations',
       })
 
-      const response = await GET(request)
+      const response = await GET(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -266,7 +264,7 @@ describe('/api/conversations', () => {
         url: 'http://localhost/api/conversations?id=conv-123',
       })
 
-      const response = await GET(request)
+      const response = await GET(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -282,7 +280,7 @@ describe('/api/conversations', () => {
         url: 'http://localhost/api/conversations?id=nonexistent',
       })
 
-      const response = await GET(request)
+      const response = await GET(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(404)
@@ -297,7 +295,7 @@ describe('/api/conversations', () => {
         url: 'http://localhost/api/conversations',
       })
 
-      const response = await GET(request)
+      const response = await GET(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -322,7 +320,7 @@ describe('/api/conversations', () => {
         body: { conversationId: 'conv-1', title: 'New Title' },
       })
 
-      const response = await PUT(request)
+      const response = await PUT(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -332,7 +330,7 @@ describe('/api/conversations', () => {
 
     it('should reject missing conversationId', async () => {
       const request = createMockRequest({ body: { title: 'New' } })
-      const response = await PUT(request)
+      const response = await PUT(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -347,7 +345,7 @@ describe('/api/conversations', () => {
         body: { conversationId: 'nonexistent', title: 'New' },
       })
 
-      const response = await PUT(request)
+      const response = await PUT(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(404)
@@ -369,7 +367,7 @@ describe('/api/conversations', () => {
         body: { conversationId: 'conv-1' },
       })
 
-      const response = await PUT(request)
+      const response = await PUT(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -386,7 +384,7 @@ describe('/api/conversations', () => {
         url: 'http://localhost/api/conversations?id=conv-1',
       })
 
-      const response = await DELETE(request)
+      const response = await DELETE(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -399,7 +397,7 @@ describe('/api/conversations', () => {
         url: 'http://localhost/api/conversations',
       })
 
-      const response = await DELETE(request)
+      const response = await DELETE(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -415,7 +413,7 @@ describe('/api/conversations', () => {
         json: async () => { throw new SyntaxError('Unexpected token') },
       }
 
-      const response = await POST(request)
+      const response = await POST(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -429,7 +427,7 @@ describe('/api/conversations', () => {
         json: async () => { throw new SyntaxError('Unexpected token') },
       }
 
-      const response = await PUT(request)
+      const response = await PUT(request as unknown as any)
       const data = await response.json()
 
       expect(response.status).toBe(500)

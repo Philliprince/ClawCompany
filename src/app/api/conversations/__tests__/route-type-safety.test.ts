@@ -3,6 +3,8 @@
  * 验证类型安全改进
  */
 
+const API_KEY = 'test-api-key-12345678901234567890'
+
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (data: unknown, options?: { status?: number }) => ({

@@ -26,6 +26,7 @@ import { TraceLogger } from '../analytics/trace-logger'
 import { CheckpointService } from '../tasks/checkpoint-service'
 import { ReviewMemoryStore, buildReviewHistoryContext } from '../tasks/review-memory-store'
 import { TokenBudgetTracker, DEFAULT_TOKEN_BUDGET } from '../llm/token-budget-tracker'
+import { classify as classifyLLMError, LLMErrorCategory } from '../llm/error-classifier'
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxRetries: 3,
@@ -167,6 +168,97 @@ export abstract class BaseOrchestrator {
     })
   }
 
+  // ─── LLM Error Classification ─────────────────────────────────────────────
+
+  /**
+   * Classify a raw LLM API error and apply the matching recovery strategy.
+   *
+   * Returns the semantic category so callers can branch on it.
+   *
+   * Strategies:
+   *   rate_limit        → Wait 60 s (busy-wait via Promise), then signal retry
+   *   billing           → Emit 'error:billing' SSE event, mark non-retryable
+   *   context_too_long  → Trigger compressHistory side-effect, then signal retry
+   *   timeout / unknown → Log, fall through to existing UnifiedRetry back-off
+   */
+  protected async handleLLMError(
+    error: unknown,
+    context?: { taskId?: string; role?: string },
+  ): Promise<LLMErrorCategory> {
+    const classification = classifyLLMError(error)
+    const { category, reason, retryDelayMs } = classification
+
+    switch (category) {
+      case 'billing':
+        this.logError('[LLMError] Billing failure — task cannot be retried', {
+          category,
+          reason,
+          ...context,
+        })
+        this.obs.eventBus.emit({
+          type: 'error:billing',
+          agentRole: context?.role,
+          taskId: context?.taskId,
+          data: { reason, category },
+        })
+        break
+
+      case 'rate_limit':
+        this.logWarn(`[LLMError] Rate limit hit — waiting ${retryDelayMs / 1000}s before retry`, {
+          category,
+          reason,
+          retryDelayMs,
+          ...context,
+        })
+        this.obs.eventBus.emit({
+          type: 'error:rate_limit',
+          agentRole: context?.role,
+          taskId: context?.taskId,
+          data: { reason, retryDelayMs },
+        })
+        if (retryDelayMs > 0) {
+          await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs))
+        }
+        break
+
+      case 'context_too_long':
+        this.logWarn('[LLMError] Context too long — compression will be triggered on next buildContext call', {
+          category,
+          reason,
+          ...context,
+        })
+        // Compression itself happens lazily inside buildContext → compressHistory.
+        // Emit a generic error:tracked so subscribers know compression was needed.
+        this.obs.eventBus.emit({
+          type: 'error:tracked',
+          agentRole: context?.role,
+          taskId: context?.taskId,
+          data: { level: 'warn', message: 'context_too_long — compression queued', reason },
+        })
+        break
+
+      case 'timeout':
+        this.logWarn('[LLMError] Timeout / transient error — will retry with back-off', {
+          category,
+          reason,
+          ...context,
+        })
+        break
+
+      default:
+        this.logWarn('[LLMError] Unknown LLM error category', {
+          category,
+          reason,
+          ...context,
+        })
+        break
+    }
+
+    return category
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   protected async executeAgentWithRetry(
     role: AgentRole,
     task: Task,
@@ -184,22 +276,82 @@ export abstract class BaseOrchestrator {
     context: AgentContext,
   ): Promise<AgentResponse | null> {
     const traceStart = Date.now()
+
+    // Mutable reference so the onRetry handler can swap in a compressed context
+    let currentContext = context
+
     const result = await this.retry.execute(
       async () => {
         const timerId = this.obs.perf.startTimer(`agent.${role}`)
         try {
-          return await callbacks.executeAgent(role, task, context)
+          return await callbacks.executeAgent(role, task, currentContext)
+        } catch (err) {
+          // ─── LLM Error Classification ──────────────────────────────────────
+          // Classify the error, apply async recovery (wait / compress), then
+          // re-throw so UnifiedRetry can decide whether to continue or stop.
+          const classification = classifyLLMError(err)
+          const { category, retryDelayMs, retryable } = classification
+
+          // Billing: emit event then rethrow as CRITICAL so UnifiedRetry stops
+          if (category === 'billing') {
+            void this.handleLLMError(err, { taskId: task.id, role })
+            const billingErr = new OrchestratorError(
+              `LLM billing failure: ${classification.reason}`,
+              { taskId: task.id, role, severity: 'critical' } as Record<string, unknown>
+            )
+            throw billingErr
+          }
+
+          // Rate limit: wait 60 s before re-throwing so UnifiedRetry will retry
+          if (category === 'rate_limit' && retryDelayMs > 0) {
+            void this.handleLLMError(err, { taskId: task.id, role })
+            await new Promise<void>(resolve => setTimeout(resolve, retryDelayMs))
+          }
+
+          // Context too long: rebuild compressed context before next attempt
+          if (category === 'context_too_long') {
+            void this.handleLLMError(err, { taskId: task.id, role })
+            try {
+              currentContext = await this.buildContext(callbacks)
+              this.logInfo('[LLMError] Context rebuilt after compression', { taskId: task.id, role })
+            } catch (ctxErr) {
+              this.logWarn('[LLMError] Failed to rebuild context after context_too_long', {
+                taskId: task.id,
+                role,
+                error: ctxErr instanceof Error ? ctxErr.message : String(ctxErr),
+              })
+            }
+          }
+
+          if (!retryable) {
+            throw err  // will be caught by shouldRetry → CRITICAL path
+          }
+
+          // Log other categories and rethrow for normal retry
+          if (category !== 'rate_limit') {
+            void this.handleLLMError(err, { taskId: task.id, role })
+          }
+
+          throw err
+          // ──────────────────────────────────────────────────────────────────
         } finally {
           this.obs.perf.stopTimer(timerId)
         }
       },
       {
+        // Stop retrying immediately for billing (non-retryable) errors
+        shouldRetry: (error: Error) => {
+          const { retryable } = classifyLLMError(error)
+          return retryable
+        },
         onRetry: (error, attempt, delay) => {
+          const { category } = classifyLLMError(error)
           this.logWarn('Agent execution retry', {
             role,
             attempt,
             delay,
             error: error.message,
+            llmErrorCategory: category,
           })
 
           this.obs.eventBus.emit({
@@ -210,6 +362,7 @@ export abstract class BaseOrchestrator {
               attempt,
               delay,
               error: error.message,
+              llmErrorCategory: category,
             },
           })
 

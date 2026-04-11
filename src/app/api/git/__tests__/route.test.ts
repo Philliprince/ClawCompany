@@ -50,7 +50,7 @@ interface MockRequestOptions {
   body?: Record<string, unknown> | string
 }
 
-function createMockRequest(options?: MockRequestOptions) {
+function createMockRequest(options?: MockRequestOptions): any {
   const url = options?.url || 'http://localhost/api/git'
   const headers: Record<string, string> = {
     'x-forwarded-for': '1.2.3.4',

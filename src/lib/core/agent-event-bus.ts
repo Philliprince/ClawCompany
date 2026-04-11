@@ -11,6 +11,10 @@ export type AgentEventType =
   | 'task:completed'
   | 'task:failed'
   | 'error:tracked'
+  /** LLM billing failure — account change required, task cannot be retried */
+  | 'error:billing'
+  /** LLM rate-limit hit — retrying after cooldown */
+  | 'error:rate_limit'
 
 export interface AgentEvent {
   type: AgentEventType

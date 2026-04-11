@@ -77,6 +77,11 @@ function makeOrchestrator() {
     deleteFile: jest.fn(),
     listFiles: jest.fn().mockResolvedValue([]),
     exists: jest.fn().mockResolvedValue(false),
+    validatePath: jest.fn().mockReturnValue({ allowed: true, sanitizedPath: 'test.txt' }),
+    validateContent: jest.fn().mockReturnValue({ allowed: true }),
+    readAllowed: jest.fn().mockResolvedValue({ success: true }),
+    getSandboxDir: jest.fn().mockReturnValue('/sandbox'),
+    getAllowedExtensions: jest.fn().mockReturnValue(['.txt', '.json']),
   } as unknown as jest.Mocked<SandboxedFileWriter>
 
   jest.spyOn(realTaskManager, 'updateTaskStatus').mockImplementation(

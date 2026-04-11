@@ -37,7 +37,7 @@ import { __mockClient } from '@/lib/gateway/client'
 
 const API_KEY = 'test-api-key-12345678901234567890'
 
-function createMockRequest(body: Record<string, unknown>, options?: { noAuth?: boolean }) {
+function createMockRequest(body: Record<string, unknown>, options?: { noAuth?: boolean }): any {
   const headers: Record<string, string> = {
     'x-forwarded-for': '1.2.3.4',
     'content-type': 'application/json',
