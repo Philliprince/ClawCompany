@@ -145,7 +145,7 @@ export class CheckpointManager {
     this.compensationQueue = []
     this.circuitBreakers = new Map()
 
-    const dir = path.dirname(this.config.dbPath)
+    const dir = path.dirname(this.config.dbPath!)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
