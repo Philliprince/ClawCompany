@@ -10,6 +10,7 @@ import {
   AgentResponse,
   FileChange,
 } from './types'
+import { FileSnapshotManager } from '../tasks/file-snapshot-manager'
 import { DAGateReason } from '../agents/devil-advocate-agent'
 import { Logger, LogEntry } from './logger'
 import { PerformanceMonitor } from './performance-monitor'
@@ -76,6 +77,8 @@ export abstract class BaseOrchestrator {
   }
   protected logCount: number = 0
   private capturedLogs: LogEntry[] = []
+  /** Shadow-git based snapshot manager — lazily initialized per project dir */
+  private snapshotManager: FileSnapshotManager | null = null
 
   constructor(retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig) {
     this.retry = new UnifiedRetry({
@@ -362,6 +365,65 @@ export abstract class BaseOrchestrator {
     return true
   }
 
+  // ─── Snapshot helpers ─────────────────────────────────────────
+
+  /**
+   * Lazily initialise the FileSnapshotManager for the current project directory.
+   * Silently no-ops if git is unavailable or init fails (snapshots are best-effort).
+   */
+  private getSnapshotManager(): FileSnapshotManager | null {
+    if (this.snapshotManager) return this.snapshotManager
+    try {
+      const mgr = FileSnapshotManager.forProject(process.cwd())
+      mgr.init()
+      this.snapshotManager = mgr
+      return mgr
+    } catch (err) {
+      this.logWarn('[FileSnapshot] Failed to initialize snapshot manager', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return null
+    }
+  }
+
+  /**
+   * Take a snapshot of the working tree. Returns snapshot ID or null on failure.
+   */
+  protected takeSnapshot(reason: string): string | null {
+    try {
+      const mgr = this.getSnapshotManager()
+      if (!mgr) return null
+      const id = mgr.snapshot(reason)
+      this.logInfo('[FileSnapshot] Snapshot created', { id, reason })
+      return id
+    } catch (err) {
+      this.logWarn('[FileSnapshot] Snapshot failed', {
+        reason,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return null
+    }
+  }
+
+  /**
+   * Roll back to a previously-captured snapshot. No-ops gracefully on failure.
+   */
+  protected rollbackToSnapshot(snapshotId: string): void {
+    try {
+      const mgr = this.getSnapshotManager()
+      if (!mgr) return
+      mgr.rollback(snapshotId)
+      this.logInfo('[FileSnapshot] Rollback complete', { snapshotId })
+    } catch (err) {
+      this.logWarn('[FileSnapshot] Rollback failed', {
+        snapshotId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // ─── Dev workflow ─────────────────────────────────────────────
+
   private async executeDevWorkflow(
     task: Task,
     cb: OrchestratorCallbacks,
@@ -373,6 +435,9 @@ export abstract class BaseOrchestrator {
     let context = await this.buildContext(cb)
 
     while (iteration < MAX_ITERATIONS) {
+      // ─── Snapshot before dev modifies anything ────────────────
+      const snapshotId = this.takeSnapshot(`before dev-agent task-${task.id} iteration-${iteration}`)
+
       // Emit dev:iteration-start before each dev attempt
       getGameEventStore().push({
         type: 'dev:iteration-start',
@@ -431,6 +496,8 @@ export abstract class BaseOrchestrator {
       // DA FATAL 判定：基本假设错误，不应继续迭代
       const daVerdict = (daResponse?.metadata as { daResult?: { verdict?: string } } | undefined)?.daResult?.verdict
       if (daVerdict === 'FATAL') {
+        // Rollback files changed by the rejected dev iteration
+        if (snapshotId) this.rollbackToSnapshot(snapshotId)
         this.markTaskFailed(task, cb, 'review', 'DA verdict: FATAL — basic assumptions are wrong')
         getGameEventStore().push({
           type: 'workflow:iteration-complete',
@@ -456,6 +523,8 @@ export abstract class BaseOrchestrator {
       // Review not approved — check if we should iterate
       iteration++
       if (iteration >= MAX_ITERATIONS) {
+        // Rollback the last rejected dev iteration's changes
+        if (snapshotId) this.rollbackToSnapshot(snapshotId)
         this.markTaskFailed(task, cb, 'review', `Review not approved after ${MAX_ITERATIONS} iterations`)
         // Emit workflow:iteration-complete on exhausted retries
         getGameEventStore().push({
@@ -474,6 +543,11 @@ export abstract class BaseOrchestrator {
         timestamp: Date.now(),
         payload: { taskId: task.id, iteration, feedback: finalResponse.message ?? '' },
       })
+
+      // ─── Rollback file changes from rejected dev iteration ────
+      if (snapshotId) {
+        this.rollbackToSnapshot(snapshotId)
+      }
 
       // Pass review feedback (from arbiter if available) into the next dev iteration
       this.logInfo('Review not approved, retrying dev with feedback', {
