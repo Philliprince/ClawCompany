@@ -74,18 +74,24 @@ export interface ToolCallResult {
 // AgentToolRegistry
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyAgentTool = AgentTool<any, any>
+
 /**
  * 工具注册表：管理所有可用工具，提供 LLM schema 生成和工具分发执行
  */
 export interface AgentToolRegistry {
   /** 注册工具 */
-  register(tool: AgentTool): void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  register(tool: AgentTool<any, any>): void
   /** 注销工具 */
   unregister(name: string): void
   /** 获取工具 */
-  get(name: string): AgentTool | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get(name: string): AgentTool<any, any> | undefined
   /** 列出所有已注册工具 */
-  listAll(): AgentTool[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  listAll(): AgentTool<any, any>[]
   /**
    * 生成 OpenAI 格式的 tools 数组，直接用于 API 请求
    * [{ type: 'function', function: { name, description, parameters } }]

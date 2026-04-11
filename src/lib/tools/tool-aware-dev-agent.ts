@@ -78,7 +78,7 @@ export function createToolAwareDevAgent(options?: {
   }
 }
 
-function buildDefaultRegistry(useOpenClawBridge = false): AgentToolRegistry {
+function buildDefaultRegistry(useOpenClawBridge = false): DefaultAgentToolRegistry {
   const registry = new DefaultAgentToolRegistry()
 
   if (useOpenClawBridge || process.env.USE_OPENCLAW_GATEWAY === 'true') {

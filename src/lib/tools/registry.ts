@@ -11,9 +11,11 @@ import {
 } from './types'
 
 export class DefaultAgentToolRegistry implements AgentToolRegistry {
-  private tools = new Map<string, AgentTool<Record<string, unknown>, unknown>>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private tools = new Map<string, AgentTool<any, any>>()
 
-  register(tool: AgentTool): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  register(tool: AgentTool<any, any>): void {
     if (this.tools.has(tool.name)) {
       console.warn(`[ToolRegistry] Tool "${tool.name}" is already registered. Overwriting.`)
     }
@@ -24,11 +26,13 @@ export class DefaultAgentToolRegistry implements AgentToolRegistry {
     this.tools.delete(name)
   }
 
-  get(name: string): AgentTool | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get(name: string): AgentTool<any, any> | undefined {
     return this.tools.get(name)
   }
 
-  listAll(): AgentTool[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  listAll(): AgentTool<any, any>[] {
     return Array.from(this.tools.values())
   }
 
