@@ -180,6 +180,9 @@ export class Orchestrator extends BaseOrchestrator {
     this.abortController = new AbortController()
     const signal = this.abortController.signal
 
+    // ─── Initialize token budget tracker for this workflow ────
+    this.initTokenBudgetTracker()
+
     const cb = this.getCallbacks()
 
     this.logInfo('Workflow started', { userMessage })

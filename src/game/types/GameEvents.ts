@@ -19,7 +19,9 @@ export type GameEventType =
   | 'pm:analysis-complete'
   | 'dev:iteration-start'
   | 'review:rejected'
-  | 'workflow:iteration-complete';
+  | 'workflow:iteration-complete'
+  | 'cost:update'
+  | 'cost:budget-exceeded';
 
 export type AgentStatus = 'idle' | 'busy' | 'working' | 'offline';
 
@@ -166,6 +168,36 @@ export interface WorkflowIterationCompleteEvent extends BaseGameEvent {
   payload: { taskId: string; totalIterations: number; approved: boolean };
 }
 
+export interface TokenUsagePayload {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface CostUpdateEvent extends BaseGameEvent {
+  type: 'cost:update';
+  payload: {
+    sessionId: string;
+    tokens: TokenUsagePayload;
+    estimatedCostUsd: number;
+    model: string;
+    budget: number;
+    remainingBudget: number;
+  };
+}
+
+export interface CostBudgetExceededEvent extends BaseGameEvent {
+  type: 'cost:budget-exceeded';
+  payload: {
+    sessionId: string;
+    tokens: TokenUsagePayload;
+    estimatedCostUsd: number;
+    model: string;
+    budget: number;
+    overage: number;
+  };
+}
+
 export type GameEvent =
   | AgentStatusEvent
   | TaskAssignedEvent
@@ -185,7 +217,9 @@ export type GameEvent =
   | PmAnalysisCompleteEvent
   | DevIterationStartEvent
   | ReviewRejectedEvent
-  | WorkflowIterationCompleteEvent;
+  | WorkflowIterationCompleteEvent
+  | CostUpdateEvent
+  | CostBudgetExceededEvent;
 
 export type GameEventHandler<T extends GameEvent = GameEvent> = (event: T) => void;
 
@@ -211,6 +245,8 @@ export interface EventTypeMap {
   'dev:iteration-start': DevIterationStartEvent;
   'review:rejected': ReviewRejectedEvent;
   'workflow:iteration-complete': WorkflowIterationCompleteEvent;
+  'cost:update': CostUpdateEvent;
+  'cost:budget-exceeded': CostBudgetExceededEvent;
 }
 
 export interface SSEMessage {

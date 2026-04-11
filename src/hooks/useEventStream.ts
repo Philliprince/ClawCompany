@@ -38,6 +38,8 @@ const NAMED_EVENT_TYPES: GameEventType[] = [
   'dev:iteration-start',
   'review:rejected',
   'workflow:iteration-complete',
+  'cost:update',
+  'cost:budget-exceeded',
 ];
 
 const MIN_BACKOFF_MS = 1000;

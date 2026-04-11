@@ -25,6 +25,7 @@ import { DPScoreStore, buildDPScoreRecord } from '../analytics/dp-score-store'
 import { TraceLogger } from '../analytics/trace-logger'
 import { CheckpointService } from '../tasks/checkpoint-service'
 import { ReviewMemoryStore, buildReviewHistoryContext } from '../tasks/review-memory-store'
+import { TokenBudgetTracker, DEFAULT_TOKEN_BUDGET } from '../llm/token-budget-tracker'
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxRetries: 3,
@@ -69,6 +70,13 @@ export interface ObservabilitySnapshot {
   logCount: number
 }
 
+export interface TokenBudgetConfig {
+  /** Maximum total tokens (input + output) for a workflow session. Default: 100K */
+  tokenBudget?: number
+  /** Model name for cost estimation. Defaults to env var or claude-3-5-sonnet */
+  model?: string
+}
+
 export abstract class BaseOrchestrator {
   protected retry: UnifiedRetry
   protected totalRetries: number = 0
@@ -91,8 +99,16 @@ export abstract class BaseOrchestrator {
   private reviewMemory: ReviewMemoryStore | null = null
   /** Current session ID for memory scoping */
   protected sessionId: string = `session-${Date.now()}`
+  /** Token budget configuration */
+  private tokenBudgetConfig: Required<TokenBudgetConfig>
+  /** Per-workflow token budget tracker — lazily created at workflow start */
+  protected tokenBudgetTracker: TokenBudgetTracker | null = null
 
-  constructor(retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig) {
+  constructor(retryConfig?: Partial<RetryConfig>, observability?: ObservabilityConfig, budgetConfig?: TokenBudgetConfig) {
+    this.tokenBudgetConfig = {
+      tokenBudget: budgetConfig?.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+      model: budgetConfig?.model ?? process.env.ANTHROPIC_MODEL ?? process.env.LLM_MODEL ?? 'claude-3-5-sonnet-20241022',
+    }
     this.retry = new UnifiedRetry({
       maxRetries: retryConfig?.maxRetries ?? DEFAULT_RETRY_CONFIG.maxRetries,
       initialDelay: retryConfig?.initialDelay ?? DEFAULT_RETRY_CONFIG.initialDelay,
@@ -111,6 +127,22 @@ export abstract class BaseOrchestrator {
   protected abstract getCallbacks(): OrchestratorCallbacks
 
   abstract executeUserRequest(userMessage: string): Promise<WorkflowResult>
+
+  /**
+   * Initialize (or reset) the token budget tracker for a new workflow session.
+   * Should be called at the start of executeUserRequest.
+   */
+  protected initTokenBudgetTracker(): void {
+    this.tokenBudgetTracker = new TokenBudgetTracker({
+      tokenBudget: this.tokenBudgetConfig.tokenBudget,
+      model: this.tokenBudgetConfig.model,
+      sessionId: this.sessionId,
+    })
+    this.logInfo('[TokenBudget] Tracker initialized', {
+      budget: this.tokenBudgetConfig.tokenBudget,
+      model: this.tokenBudgetConfig.model,
+    })
+  }
 
   protected logInfo(message: string, context?: Record<string, unknown>): void {
     this.logCount++
@@ -230,6 +262,29 @@ export abstract class BaseOrchestrator {
       })
     }
     // ───────────────────────────────────────────────────────────
+
+    // ─── Token Budget Check ──────────────────────────────────────
+    if (this.tokenBudgetTracker) {
+      try {
+        const budgetExceeded = this.tokenBudgetTracker.recordAndCheck()
+        if (budgetExceeded) {
+          this.logWarn('[TokenBudget] Budget exceeded — stopping agent execution', {
+            taskId: task.id,
+            role,
+            tokens: this.tokenBudgetTracker.getSessionTokens(),
+            cost: this.tokenBudgetTracker.getCostEstimate().estimatedCostUsd,
+          })
+          // Return null to signal upstream to stop: task will be marked failed
+          return null
+        }
+      } catch (budgetErr) {
+        // Non-fatal: budget tracking errors must never break the main flow
+        this.logWarn('[TokenBudget] Error checking budget', {
+          error: budgetErr instanceof Error ? budgetErr.message : String(budgetErr),
+        })
+      }
+    }
+    // ────────────────────────────────────────────────────────────
 
     if (result.success) {
       return agentResp
