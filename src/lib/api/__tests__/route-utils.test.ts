@@ -10,12 +10,14 @@ import {
 } from '../route-utils'
 
 import { RateLimiter } from '@/lib/security/utils'
+import * as rateLimiterModule from '@/lib/security/rate-limiter'
 
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (data: any, options?: any) => ({
       json: async () => data,
       status: options?.status || 200,
+      headers: new Map(Object.entries(options?.headers || {})),
     }),
   },
 }))
@@ -25,6 +27,15 @@ jest.mock('@/lib/security/utils', () => ({
     isAllowed: jest.fn(() => true),
     getRemaining: jest.fn(() => 60),
   },
+}))
+
+jest.mock('@/lib/security/rate-limiter', () => ({
+  check: jest.fn((ip: string) => ({
+    allowed: true,
+    remaining: 9,
+    limit: 10,
+    resetAt: Date.now() + 60000,
+  })),
 }))
 
 jest.mock('@/lib/core/logger', () => ({
@@ -122,7 +133,12 @@ describe('route-utils', () => {
 
   describe('checkRateLimit', () => {
     it('should return null when rate limit is not exceeded', () => {
-      ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(true)
+      ;(rateLimiterModule.check as jest.Mock).mockReturnValue({
+        allowed: true,
+        remaining: 9,
+        limit: 10,
+        resetAt: Date.now() + 60000,
+      })
 
       const request = {
         headers: {
@@ -134,8 +150,13 @@ describe('route-utils', () => {
     })
 
     it('should return 429 response when rate limit exceeded', () => {
-      ;(RateLimiter.isAllowed as jest.Mock).mockReturnValue(false)
-      ;(RateLimiter.getRemaining as jest.Mock).mockReturnValue(0)
+      ;(rateLimiterModule.check as jest.Mock).mockReturnValue({
+        allowed: false,
+        remaining: 0,
+        limit: 10,
+        resetAt: Date.now() + 60000,
+        retryAfter: 30,
+      })
 
       const request = {
         headers: {

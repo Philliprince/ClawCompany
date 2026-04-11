@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { RateLimiter } from '@/lib/security/utils'
+import { check as slidingWindowCheck } from '@/lib/security/rate-limiter'
 import { isAppError, AppError, ErrorCategory, ErrorSeverity } from '@/lib/core/errors'
 import { logger } from '@/lib/core/logger'
 
@@ -11,13 +12,27 @@ export function getClientId(request: NextRequest): string {
 
 export function checkRateLimit(request: NextRequest): NextResponse | null {
   const clientId = getClientId(request)
-  if (!RateLimiter.isAllowed(clientId)) {
-    return NextResponse.json({
+  
+  const result = slidingWindowCheck(clientId)
+  
+  if (!result.allowed) {
+    const response = NextResponse.json({
       success: false,
       error: 'Rate limit exceeded. Please try again later.',
-      remaining: RateLimiter.getRemaining(clientId)
-    }, { status: 429 })
+      remaining: result.remaining,
+      retryAfter: result.retryAfter,
+    }, { 
+      status: 429,
+      headers: {
+        'Retry-After': String(result.retryAfter),
+        'X-RateLimit-Limit': String(result.limit),
+        'X-RateLimit-Remaining': String(result.remaining),
+        'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
+      }
+    })
+    return response
   }
+  
   return null
 }
 
@@ -88,7 +103,18 @@ export function successResponse(data: Record<string, unknown>, request?: NextReq
     const clientId = getClientId(request)
     response.remaining = RateLimiter.getRemaining(clientId)
   }
-  return NextResponse.json(response)
+  
+  const nextResponse = NextResponse.json(response)
+  
+  if (request) {
+    const clientId = getClientId(request)
+    const result = slidingWindowCheck(clientId)
+    nextResponse.headers.set('X-RateLimit-Limit', String(result.limit))
+    nextResponse.headers.set('X-RateLimit-Remaining', String(result.remaining))
+    nextResponse.headers.set('X-RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)))
+  }
+  
+  return nextResponse
 }
 
 type RouteHandler = (request: NextRequest) => Promise<NextResponse>
