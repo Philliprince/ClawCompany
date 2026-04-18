@@ -23,10 +23,42 @@ export interface SpawnResult {
   error?: string
 }
 
+export type OpenClawToolType = 
+  | 'read' | 'write' | 'edit' | 'delete' | 'mkdir'
+  | 'bash' | 'shell' | 'grep' | 'find' | 'glob'
+  | 'browser' | 'screenshot' | 'click' | 'type'
+  | 'search' | 'fetch' | 'http'
+  | 'git' | 'npm' | 'python' | 'node'
+  | 'test' | 'lint' | 'build' | 'deploy'
+  | 'unknown'
+
+export interface HistoryToolMetadata {
+  name: OpenClawToolType
+  rawName?: string
+  duration?: number
+  success?: boolean
+}
+
+export interface HistoryFileMetadata {
+  paths: string[]
+  operation: 'read' | 'write' | 'edit' | 'delete' | 'list'
+}
+
+export interface HistoryArtifactMetadata {
+  paths: string[]
+  type: 'html' | 'tsx' | 'code' | 'image' | 'markdown' | 'json' | 'test-report' | 'url'
+}
+
 export interface HistoryMessage {
   role: 'user' | 'assistant' | 'toolResult'
   content: string
   status?: 'pending' | 'running' | 'completed' | 'failed'
+  timestamp?: string
+  tool?: HistoryToolMetadata
+  files?: HistoryFileMetadata[]
+  artifacts?: HistoryArtifactMetadata[]
+  messageId?: string
+  parentId?: string
 }
 
 export interface SendOptions {
@@ -225,17 +257,18 @@ export class OpenClawGatewayClient {
 
     while (Date.now() - startTime < timeout) {
       try {
-        const history = await this.sessions_history(sessionKey, 1)
-        
-        if (history.length > 0) {
-          const lastMessage = history[0]
-          
-          if (lastMessage.status === 'completed') {
-            return lastMessage.content
-          }
-          
-          if (lastMessage.status === 'failed') {
-            throw new Error(`Session failed: ${lastMessage.content}`)
+        const sessions = await this.call<{ sessions: Array<{ key: string; endedAt?: string; status?: string; lastMessage?: string }> }>('sessions.list', {})
+        const session = sessions.sessions?.find((s) => s.key === sessionKey)
+
+        if (session) {
+          if (session.endedAt) {
+            // Session has ended — check status
+            if (session.status === 'failed') {
+              throw new Error(`Session failed: ${session.lastMessage ?? 'unknown error'}`)
+            }
+            // Completed — return last message content
+            const history = await this.sessions_history(sessionKey, 1)
+            return history[0]?.content ?? ''
           }
         }
 
@@ -251,31 +284,26 @@ export class OpenClawGatewayClient {
   }
 }
 
-let defaultClient: OpenClawGatewayClient | null = null
-
-export function getGatewayClient(): OpenClawGatewayClient {
-  if (!defaultClient) {
-    const url = process.env.OPENCLAW_GATEWAY_URL || 'ws://127.0.0.1:18789'
-    const token = process.env.OPENCLAW_GATEWAY_TOKEN
-    defaultClient = new OpenClawGatewayClient(url, { token })
-  }
-  return defaultClient
-}
-
-export function setGatewayClient(client: OpenClawGatewayClient | null): void {
-  defaultClient = client
-}
-
-export function resetGatewayClient(): void {
-  if (defaultClient) {
-    defaultClient.disconnect().catch(console.error)
-    defaultClient = null
-  }
-}
+let _gatewayClient: OpenClawGatewayClient | null = null
 
 export function createGatewayClient(url?: string, options?: GatewayOptions): OpenClawGatewayClient {
   return new OpenClawGatewayClient(
     url || process.env.OPENCLAW_GATEWAY_URL || 'ws://127.0.0.1:18789',
     { token: process.env.OPENCLAW_GATEWAY_TOKEN, ...options },
   )
+}
+
+export function getGatewayClient(): OpenClawGatewayClient {
+  if (!_gatewayClient) {
+    _gatewayClient = createGatewayClient()
+  }
+  return _gatewayClient
+}
+
+export function resetGatewayClient(): void {
+  _gatewayClient = null
+}
+
+export function setGatewayClient(client: OpenClawGatewayClient): void {
+  _gatewayClient = client
 }
