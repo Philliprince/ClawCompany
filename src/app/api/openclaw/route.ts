@@ -4,9 +4,18 @@ import { withAuth, withRateLimit, successResponse, errorResponse } from '@/lib/a
 import { InputValidator } from '@/lib/security/utils'
 
 const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:18789'
+const OPENCLAW_GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN
 
 const POLL_MAX_ATTEMPTS = 30
 const POLL_INTERVAL_MS = 2000
+
+function gatewayHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (OPENCLAW_GATEWAY_TOKEN) {
+    headers['Authorization'] = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+  }
+  return headers
+}
 
 export const POST = withAuth(withRateLimit(async (request: NextRequest) => {
   const body = await request.json()
@@ -23,15 +32,13 @@ export const POST = withAuth(withRateLimit(async (request: NextRequest) => {
   const sanitizedRequest = InputValidator.sanitize(userRequest)
 
   try {
-    const response = await fetch(`${OPENCLAW_GATEWAY_URL}/api/sessions/run`, {
+    const response = await fetch(`${OPENCLAW_GATEWAY_URL}/tools/invoke`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: gatewayHeaders(),
       body: JSON.stringify({
-        message: sanitizedRequest,
-        model: 'zai/glm-5',
-        thinking: 'high',
+        tool: 'sessions_spawn',
+        args: { task: sanitizedRequest, mode: 'run' },
+        sessionKey: 'main',
       }),
     })
 
@@ -40,13 +47,14 @@ export const POST = withAuth(withRateLimit(async (request: NextRequest) => {
     }
 
     const data = await response.json()
-    console.log('[OpenClaw API] Session spawned:', data.sessionKey)
+    const sessionKey = data.result?.sessionKey ?? data.result
+    console.log('[OpenClaw API] Session spawned:', sessionKey)
 
-    const result = await pollForResult(data.sessionKey)
+    const result = await pollForResult(sessionKey)
 
     return successResponse({
       messages: result.messages,
-      sessionKey: data.sessionKey,
+      sessionKey,
     }, request)
   } catch (error) {
     return errorResponse(error, 500, 'OpenClaw API')
@@ -80,16 +88,23 @@ async function pollForResult(sessionKey: string): Promise<{ messages: Array<{ ag
   let consecutiveErrors = 0
   for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
     try {
-      const response = await fetch(
-        `${OPENCLAW_GATEWAY_URL}/api/sessions/history?sessionKey=${sessionKey}&limit=10`,
-      )
+      const response = await fetch(`${OPENCLAW_GATEWAY_URL}/tools/invoke`, {
+        method: 'POST',
+        headers: gatewayHeaders(),
+        body: JSON.stringify({
+          tool: 'sessions_history',
+          args: { sessionKey, limit: 10 },
+          sessionKey: 'main',
+        }),
+      })
 
       if (!response.ok) {
         throw new Error(`History fetch error: ${response.status}`)
       }
 
       consecutiveErrors = 0
-      const history = await response.json()
+      const data = await response.json()
+      const history = data.result
 
       if (history && history.length > 0) {
         const lastMessage = history[0]
