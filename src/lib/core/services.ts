@@ -11,6 +11,7 @@ import { LLMFactory } from '../llm/factory'
 import { OpenClawGatewayClient } from '../gateway/client'
 import { OpenClawAgentExecutor } from '../gateway/executor'
 import { GameEventStore } from '../../game/data/GameEventStore'
+import { bridgeEventBusToStore } from '../orchestrator/bridge'
 import type { LLMProvider } from '../llm/types'
 
 export const Services = {
@@ -93,12 +94,19 @@ export function createAppContainer(rootDir?: string): Container {
   })
 
   container.register<Orchestrator>(Services.Orchestrator, (c) => {
-    return createOrchestrator({
+    const orchestrator = createOrchestrator({
       agentManager: c.resolve<AgentManager>(Services.AgentManager),
       taskManager: c.resolve<TaskManager>(Services.TaskManager),
       chatManager: c.resolve<ChatManager>(Services.ChatManager),
       sandboxedWriter: c.resolve<SandboxedFileWriter>(Services.SandboxedFileWriter),
     })
+
+    // P0-C fix: bridge AgentEventBus → GameEventStore so SSE endpoint
+    // receives Orchestrator progress events.
+    const gameEventStore = c.resolve<GameEventStore>(Services.GameEventStore)
+    bridgeEventBusToStore(orchestrator.getEventBus(), gameEventStore, 'default')
+
+    return orchestrator
   })
 
   return container
