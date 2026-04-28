@@ -1,5 +1,51 @@
+import path from 'path'
+import os from 'os'
+import fs from 'fs'
+
 import { OpenClawGatewayClient, SpawnOptions, SpawnResult, SendResult, getGatewayClient } from './client'
 import { sanitizeUserInput } from '../utils/prompt-sanitizer'
+
+// ---------------------------------------------------------------------------
+// P0-4: Worker crash detection helpers
+// ---------------------------------------------------------------------------
+
+const MAX_SPAWN_RETRIES = 3
+const INITIAL_BACKOFF_MS = 1000
+
+/**
+ * Record a worker crash/recovery event to the blackboard workerStatus file.
+ * Uses a simple JSON file (same approach as BlackboardStore) to avoid coupling
+ * to the full orchestrator stack.
+ */
+function recordWorkerStatus(
+  agentRole: string,
+  event: 'crash' | 'retry' | 'recovered' | 'failed',
+  details: Record<string, unknown>,
+): void {
+  try {
+    const dir = path.join(os.homedir(), '.clawcompany', 'blackboard')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, 'workerStatus.json')
+    let current: Record<string, unknown[]> = {}
+    try {
+      current = JSON.parse(fs.readFileSync(file, 'utf8'))
+    } catch {
+      // file doesn't exist yet – start fresh
+    }
+    if (!Array.isArray(current[agentRole])) {
+      current[agentRole] = []
+    }
+    ;(current[agentRole] as unknown[]).push({
+      event,
+      timestamp: new Date().toISOString(),
+      ...details,
+    })
+    fs.writeFileSync(file, JSON.stringify(current, null, 2), 'utf8')
+  } catch (err) {
+    // Non-fatal – log and move on
+    console.error('[executor] Failed to write workerStatus blackboard:', err)
+  }
+}
 
 const ROLE_TO_SESSION_PREFIX: Record<string, string> = {
   pm: 'sidekick-claw',
@@ -91,40 +137,81 @@ export class OpenClawAgentExecutor {
       spawnOptions.label = `Review: ${task.substring(0, 50)}`
     }
 
-    try {
-      const result = await this.client.sessions_spawn(spawnOptions)
+    // P0-4: retry loop with exponential backoff + crash detection
+    let lastError: Error | undefined
+    for (let attempt = 0; attempt < MAX_SPAWN_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)
+        console.warn(
+          `[executor] Retrying ${agentRole} agent (attempt ${attempt + 1}/${MAX_SPAWN_RETRIES}) after ${backoffMs}ms backoff`
+        )
+        recordWorkerStatus(agentRole, 'retry', { attempt, backoffMs, error: lastError?.message })
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
+      }
 
-      if (result.status !== 'accepted') {
-        return {
-          success: false,
-          error: result.error || 'Spawn failed'
+      try {
+        const result = await this.client.sessions_spawn(spawnOptions)
+
+        if (result.status !== 'accepted') {
+          const err = new Error(result.error || 'Spawn failed')
+          recordWorkerStatus(agentRole, 'crash', { attempt, error: err.message, runId: result.runId })
+          lastError = err
+          continue // retry
         }
-      }
 
-      if (!result.childSessionKey) {
-        return {
-          success: false,
-          error: `Spawn accepted but no childSessionKey returned (runId: ${result.runId ?? 'unknown'})`
+        if (!result.childSessionKey) {
+          const err = new Error(
+            `Spawn accepted but no childSessionKey returned (runId: ${result.runId ?? 'unknown'})`
+          )
+          recordWorkerStatus(agentRole, 'crash', { attempt, error: err.message, runId: result.runId })
+          lastError = err
+          continue // retry
         }
-      }
 
-      const completionTimeout = (config.timeout || 300) * 1000
-      const content = await this.client.waitForCompletion(
-        result.childSessionKey,
-        completionTimeout
-      )
+        const completionTimeout = (config.timeout || 300) * 1000
+        let content: string
+        try {
+          content = await this.client.waitForCompletion(
+            result.childSessionKey,
+            completionTimeout
+          )
+        } catch (completionError) {
+          // Session crashed/failed during execution
+          const err = completionError instanceof Error ? completionError : new Error(String(completionError))
+          console.error(`[executor] ${agentRole} session crashed:`, err.message)
+          recordWorkerStatus(agentRole, 'crash', {
+            attempt,
+            error: err.message,
+            sessionKey: result.childSessionKey,
+            runId: result.runId,
+          })
+          lastError = err
+          continue // retry
+        }
 
-      return {
-        success: true,
-        sessionKey: result.childSessionKey,
-        runId: result.runId,
-        content
+        if (attempt > 0) {
+          recordWorkerStatus(agentRole, 'recovered', { attempt, sessionKey: result.childSessionKey })
+        }
+
+        return {
+          success: true,
+          sessionKey: result.childSessionKey,
+          runId: result.runId,
+          content
+        }
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error))
+        console.error(`[executor] ${agentRole} spawn error (attempt ${attempt + 1}):`, err.message)
+        recordWorkerStatus(agentRole, 'crash', { attempt, error: err.message })
+        lastError = err
       }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+    }
+
+    // All retries exhausted
+    recordWorkerStatus(agentRole, 'failed', { error: lastError?.message, maxRetries: MAX_SPAWN_RETRIES })
+    return {
+      success: false,
+      error: lastError?.message ?? 'Unknown error'
     }
   }
 
